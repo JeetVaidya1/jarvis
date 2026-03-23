@@ -1,0 +1,300 @@
+# Jarvis
+
+> Personal AI agent running 24/7 on a MacBook Pro. Controlled via Telegram. Built on Claude.
+
+Jarvis is a self-hosted autonomous agent that serves as a second brain and force multiplier. It handles development tasks, browses the web, trades on Polymarket, monitors GitHub repos, manages memory across sessions, and executes background jobs — all from a Telegram chat.
+
+---
+
+## Architecture
+
+```
+Telegram (GrammY)
+    ↓
+Agent Loop (Claude claude-sonnet-4-6)
+    ↓
+Tool Router
+    ├── Shell execution
+    ├── File read/write
+    ├── Browser automation (Playwright)
+    ├── Web search + fetch
+    ├── Polymarket trading (CLOB SDK)
+    ├── GitHub operations (gh CLI)
+    ├── Claude Code delegation (claude --print)
+    └── Sub-agent spawning
+    ↓
+Memory + Session persistence
+    ↓
+Webhook ingress (port 7777)
+    ↓
+Scheduled programs (cron via node-cron)
+```
+
+**Key design decisions:**
+- All intelligence lives in Claude — tools are thin wrappers
+- Memory is flat Markdown files (no database)
+- Sessions are saved/restored across restarts so context survives
+- The trading engine runs as a sub-system within the same process
+- Claude Code is used for all non-trivial coding tasks (free on Max plan)
+
+---
+
+## Features
+
+### Core Agent
+- Conversational AI via Telegram with full tool access
+- Persistent memory across sessions (`memory/MEMORY.md` + daily logs)
+- Session save/restore — survives restarts without losing context
+- Context compaction — large conversations are auto-pruned to stay within limits
+- Media understanding — photos (vision), voice (Whisper), documents
+
+### Browser Automation
+- Full headless Chrome via Playwright
+- Navigate, screenshot, click, type, extract content, run JS
+- Claude sees screenshots visually (multimodal)
+
+### Web & Data
+- Web search via DuckDuckGo (no API key)
+- Fetch + read any URL
+- Real-time crypto/stock prices
+
+### Polymarket Trading
+- Full CLOB SDK integration — orderbook, positions, P&L
+- Automated trading engine with Claude Opus forecaster
+- Risk management: max trade size, max deployed capital, position limits
+- Always dry-runs before placing real orders
+- Edge threshold filtering — only trades with meaningful model edge
+
+### GitHub Integration
+- Repo status, PRs, issues, commit history
+- Trigger workflow runs
+- Uses `gh` CLI under the hood
+
+### Claude Code Delegation
+- Delegates complex coding tasks to `claude --print` subprocess
+- Free on Max plan — preferred over inline code edits for anything non-trivial
+- Full file system and web access within the subprocess
+
+### Sub-Agents
+- Spawn background tasks that don't block the main conversation
+- Check status, retrieve results, cancel running jobs
+
+### Scheduled Programs
+- Markdown files in `agent/programs/` define autonomous cron tasks
+- Each file has a schedule and a prompt — Jarvis executes them automatically
+- Results delivered to Telegram
+
+### Webhook Ingress
+- External systems can POST to `http://localhost:7777/webhook`
+- Jarvis processes the event and responds to Telegram
+- HMAC-signed for security
+
+---
+
+## Project Structure
+
+```
+jarvis/
+├── src/
+│   ├── index.ts          # Entry point — boots everything
+│   ├── agent.ts          # Main agent loop (Claude API calls)
+│   ├── bot.ts            # Telegram bot setup (GrammY)
+│   ├── commands.ts       # Slash commands (/status, /reset, etc.)
+│   ├── config.ts         # Environment config + validation
+│   ├── events.ts         # Event bus for cross-module communication
+│   ├── heartbeat.ts      # 30-min system health checks
+│   ├── links.ts          # URL auto-expansion in messages
+│   ├── logger.ts         # Structured logging to daily log files
+│   ├── mcp-server.ts     # MCP server exposing tools to Claude Code
+│   ├── media.ts          # Photo/voice/document handling
+│   ├── memory.ts         # Read/write MEMORY.md + daily logs
+│   ├── programs.ts       # Scheduled autonomous programs
+│   ├── session.ts        # Session save/restore across restarts
+│   ├── subagent.ts       # Background sub-agent management
+│   ├── compaction.ts     # Context window compaction logic
+│   ├── webhook.ts        # HTTP webhook ingress server
+│   ├── tools/
+│   │   ├── index.ts      # Tool registry + router
+│   │   ├── shell.ts      # shell_exec — run terminal commands
+│   │   ├── files.ts      # file_read / file_write
+│   │   ├── browser.ts    # Playwright browser automation
+│   │   ├── websearch.ts  # DuckDuckGo search + URL fetch + prices
+│   │   ├── github.ts     # GitHub operations via gh CLI
+│   │   ├── polymarket.ts # Polymarket CLOB + Data API tools
+│   │   ├── claude-code.ts # claude_code / claude_code_edit / claude_code_review
+│   │   └── memory-tool.ts # memory_update tool
+│   └── trading/
+│       ├── index.ts      # Trading engine entry point
+│       ├── engine.ts     # Main trading loop + lifecycle
+│       ├── scanner.ts    # Market discovery + filtering
+│       ├── forecaster.ts # Claude Opus market analysis + edge calculation
+│       ├── executor.ts   # Order placement + dry-run logic
+│       └── risk.ts       # Position limits, capital constraints
+├── agent/
+│   ├── SOUL.md           # System prompt — Jarvis's identity + instructions
+│   ├── MEMORY.md         # Index of memory files
+│   ├── HEARTBEAT.md      # Heartbeat program config
+│   ├── programs/         # Scheduled autonomous tasks (cron + prompt)
+│   └── skills/           # Reusable skill prompts (GitHub, Polymarket, etc.)
+├── memory/               # Persistent memory files (gitignored except .gitkeep)
+├── logs/                 # Daily log files (gitignored)
+├── sessions/             # Session state files (gitignored)
+├── .env.example          # Environment variable template
+├── tsconfig.json         # TypeScript config
+└── package.json
+```
+
+---
+
+## Setup
+
+### Prerequisites
+- Node.js 22+
+- A Telegram bot token ([@BotFather](https://t.me/BotFather))
+- An Anthropic API key (or Claude Max plan with `claude` CLI installed)
+- `gh` CLI installed and authenticated (for GitHub tools)
+- Playwright browsers: `npx playwright install chromium`
+
+### Install
+
+```bash
+git clone https://github.com/jeetvaidya/jarvis.git
+cd jarvis
+npm install
+npx playwright install chromium
+```
+
+### Configure
+
+```bash
+cp .env.example .env
+```
+
+Fill in `.env`:
+
+```env
+# Required
+ANTHROPIC_API_KEY=sk-ant-...
+TELEGRAM_BOT_TOKEN=123456:ABC...
+TELEGRAM_ALLOWED_USER_ID=123456789   # Your Telegram user ID
+
+# Polymarket (optional — enables trading tools)
+POLYMARKET_API_KEY=
+POLYMARKET_API_SECRET=
+POLYMARKET_API_PASSPHRASE=
+POLYMARKET_WALLET_PRIVATE_KEY=
+POLYMARKET_PROXY_ADDRESS=
+
+# GitHub (optional — fallback if gh CLI not available)
+GITHUB_TOKEN=
+
+# Webhook server (optional)
+JARVIS_WEBHOOK_SECRET=your-hmac-secret
+JARVIS_WEBHOOK_PORT=7777
+```
+
+### Run
+
+```bash
+# Development (hot reload)
+npm run dev
+
+# Production
+npm run build && npm start
+```
+
+---
+
+## Telegram Commands
+
+| Command | Description |
+|---------|-------------|
+| `/status` | System status: memory, uptime, active jobs |
+| `/reset` | Clear conversation context |
+| `/compact` | Force context compaction |
+| `/history` | Show recent conversation summary |
+| `/jobs` | List running background sub-agents |
+| `/help` | Show available commands |
+
+---
+
+## Trading Engine
+
+The trading engine lives in `src/trading/` and runs as part of the main process.
+
+**Flow per cycle:**
+1. `scanner.ts` — fetches active Polymarket markets, filters by category/liquidity/time
+2. `forecaster.ts` — sends each candidate to Claude Opus for analysis, gets a probability estimate
+3. Edge calculation: `edge = |model_prob - market_price|`
+4. `risk.ts` — checks capital limits, max positions, min edge threshold
+5. `executor.ts` — dry-runs the order, then places it if Jeet hasn't paused trading
+
+**Config (set via Telegram):**
+- `maxTrade` — max USDC per trade (default $8)
+- `maxDeployed` — max total capital deployed (default $20)
+- `minEdge` — minimum edge required (default 4%)
+- `maxPositions` — max concurrent open positions (default 4)
+
+**Start/stop via Telegram:**
+```
+/trade start
+/trade stop
+/trade status
+```
+
+---
+
+## Memory System
+
+Memory is stored as plain Markdown files in `memory/`. The agent reads `memory/MEMORY.md` (an index) at startup and appends to it throughout the session.
+
+Types of memory:
+- **user** — who Jeet is, preferences, communication style
+- **feedback** — corrections and confirmations from past sessions
+- **project** — active work, decisions, deadlines
+- **reference** — pointers to external resources
+
+Logs are written to `logs/YYYY-MM-DD.log` and include every agent response, tool call result, and trade event.
+
+---
+
+## MCP Server
+
+Jarvis exposes its tools as an MCP (Model Context Protocol) server at `jarvis-mcp.json`. This lets Claude Code instances connect to Jarvis's tool set directly — enabling Claude Code to call `polymarket_get_positions`, `jarvis_browser_screenshot`, etc. from within a VS Code session.
+
+```bash
+# The MCP server runs automatically alongside Jarvis
+# Config: jarvis-mcp.json
+node dist/mcp-server.js
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Runtime | Node.js 22, TypeScript |
+| AI | Anthropic Claude (claude-sonnet-4-6 for agent, claude-opus-4-6 for trading forecasts) |
+| Telegram | GrammY |
+| Browser | Playwright (headless Chromium) |
+| Trading | @polymarket/clob-client |
+| Scheduling | node-cron |
+| MCP | @modelcontextprotocol/sdk |
+| Crypto | ethers.js v6 |
+
+---
+
+## Security Notes
+
+- Only the `TELEGRAM_ALLOWED_USER_ID` can interact with Jarvis — all other users are rejected
+- `.env` is gitignored — never committed
+- Webhook requests are HMAC-verified
+- Polymarket orders always dry-run first; orders over $50 require extra confirmation
+- No secrets are ever logged or included in responses
+
+---
+
+## License
+
+Private — personal use only.
