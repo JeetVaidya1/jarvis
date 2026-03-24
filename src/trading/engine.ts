@@ -19,9 +19,11 @@ import {
   scanMarkets,
   type ScoredMarket,
 } from "./scanner.js";
-import { forecast } from "./forecaster.js";
-import { calculateEdge, sizePosition } from "./risk.js";
+import { forecast, evalTrade, type Prediction } from "./forecaster.js";
+import { calculateEdge, sizePosition, type EdgeResult } from "./risk.js";
 import { executeOrder, getBalance, getOpenPositions } from "./executor.js";
+import { saveOutcome } from "./outcomes.js";
+import type { TradeOutcome } from "./outcomes.js";
 
 const log = createLogger("trading");
 
@@ -133,32 +135,44 @@ export async function runTradingCycle(config: TradingConfig): Promise<string> {
 
     let tradePlaced = false;
 
-    for (const market of candidates) {
-      if (tradePlaced) break; // One trade per cycle to be safe
-
-      try {
-        // Forecast with anti-anchoring (Opus doesn't see the market price)
-        log.info(`Forecasting: ${market.question.slice(0, 60)}...`);
+    // Parallelize forecasts across all candidates — drops cycle time from N×30s to ~30s
+    log.info(`Forecasting ${candidates.length} markets in parallel...`);
+    const forecastResults = await Promise.allSettled(
+      candidates.map(async (market) => {
         const prediction = await forecast(market);
-
-        if (!prediction) {
-          log.info(`No forecast for: ${market.question.slice(0, 40)}`);
-          continue;
-        }
-
-        // Calculate edge
-        const edge = calculateEdge(
-          prediction.probability,
-          market.yesPrice,
-          prediction.side,
-        );
-
+        if (!prediction) return null;
+        const edge = calculateEdge(prediction.probability, market.yesPrice, prediction.side);
         log.info(
           `${market.question.slice(0, 40)} | Model: ${(prediction.probability * 100).toFixed(1)}% | Market: ${(market.yesPrice * 100).toFixed(1)}% | Edge: ${(edge.netEdge * 100).toFixed(1)}% | Side: ${prediction.side}`,
         );
+        return { market, prediction, edge };
+      })
+    );
 
-        if (edge.netEdge < config.minEdge) {
-          continue; // Not enough edge
+    // Collect opportunities above edge threshold, ranked by edge descending
+    type Opportunity = { market: ScoredMarket; prediction: Prediction; edge: EdgeResult };
+    const opportunities: Opportunity[] = forecastResults
+      .filter((r): r is PromiseFulfilledResult<Opportunity> =>
+        r.status === "fulfilled" && r.value !== null
+      )
+      .map((r) => r.value)
+      .filter((o) => o.edge.netEdge >= config.minEdge)
+      .sort((a, b) => b.edge.netEdge - a.edge.netEdge);
+
+    if (opportunities.length === 0) {
+      results.push("No markets met edge threshold this cycle");
+    }
+
+    for (const { market, prediction, edge } of opportunities) {
+      if (tradePlaced) break;
+
+      try {
+        // Devil's advocate eval — argue the bear case before trading
+        const eval_ = await evalTrade(market, prediction);
+        if (!eval_.proceed) {
+          log.info(`Eval agent rejected trade: ${market.question.slice(0, 40)} — ${eval_.reason.slice(0, 80)}`);
+          results.push(`EVAL SKIP: ${market.question.slice(0, 40)} — ${eval_.reason.slice(0, 60)}`);
+          continue;
         }
 
         // Size the position
@@ -217,6 +231,22 @@ export async function runTradingCycle(config: TradingConfig): Promise<string> {
 
         tradeHistory.push(tradeRecord);
 
+        // Persist to outcome store for model calibration
+        const tradeOutcome: TradeOutcome = {
+          id: tradeRecord.orderId ?? tradeRecord.timestamp,
+          conditionId: tradeRecord.conditionId,
+          market: tradeRecord.market,
+          side: tradeRecord.side,
+          modelProb: tradeRecord.modelProb,
+          marketProb: tradeRecord.marketProb,
+          edge: tradeRecord.edge,
+          size: tradeRecord.size,
+          price: tradeRecord.price,
+          placedAt: tradeRecord.timestamp,
+          result: tradeRecord.status === "placed" ? undefined : "VOID",
+        };
+        await saveOutcome(tradeOutcome);
+
         // Log to memory
         const logLine = `[TRADE ${tradeRecord.status.toUpperCase()}] ${tradeRecord.timestamp} | ${tradeRecord.side} "${tradeRecord.market}" | $${tradeRecord.size.toFixed(2)} @ ${(tradeRecord.price * 100).toFixed(1)}% | Edge: ${(tradeRecord.edge * 100).toFixed(1)}% | Model: ${(tradeRecord.modelProb * 100).toFixed(1)}%`;
         await memoryUpdate(logLine, "append");
@@ -225,10 +255,6 @@ export async function runTradingCycle(config: TradingConfig): Promise<string> {
         const msg = error instanceof Error ? error.message : String(error);
         log.error(`Error evaluating ${market.question.slice(0, 40)}: ${msg}`);
       }
-    }
-
-    if (!tradePlaced && results.length <= 1) {
-      results.push("No markets met edge threshold this cycle");
     }
 
     const elapsed = ((Date.now() - cycleStart) / 1000).toFixed(1);

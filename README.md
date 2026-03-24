@@ -62,6 +62,7 @@ Scheduled programs (cron via node-cron)
 - Full CLOB SDK integration — orderbook, positions, P&L
 - Automated trading engine with Claude Opus forecaster
 - **Local ML sentiment** — DistilBERT SST-2 runs in-process (~30ms) to pre-signal market sentiment before the full Opus pass; injected into every forecast as an additional feature
+- **Parallel forecasting** — all candidate markets are analyzed simultaneously via `Promise.allSettled()`; cycle time drops from ~5min sequential to ~30s regardless of candidate count
 - Risk management: max trade size, max deployed capital, position limits
 - Always dry-runs before placing real orders
 - Edge threshold filtering — only trades with meaningful model edge
@@ -85,7 +86,7 @@ Scheduled programs (cron via node-cron)
 - Markdown files in `agent/programs/` define autonomous cron tasks
 - Each file has a schedule and a prompt — Jarvis executes them automatically
 - Results delivered to Telegram
-- **Built-in programs:** morning briefing (7am), portfolio review (10am/2pm/6pm), end-of-day summary (8pm), weekly outcome review (Mon 9am)
+- **Built-in programs:** morning briefing (8am — weather, portfolio, crypto, calendar, Gmail, GitHub PRs), portfolio review (10am/2pm/6pm), end-of-day summary (8pm), weekly outcome review (Mon 9am)
 
 ### Webhook Ingress
 - External systems can POST to `http://localhost:7777/webhook`
@@ -230,12 +231,13 @@ The trading engine lives in `src/trading/` and runs as part of the main process.
 
 **Flow per cycle:**
 1. `scanner.ts` — fetches active Polymarket markets, filters by category/liquidity/time
-2. `forecaster.ts` — for each candidate:
+2. `forecaster.ts` — **all candidates forecasted in parallel** via `Promise.allSettled()`:
    a. `sentiment.ts` — local DistilBERT classifies market question sentiment (~30ms, in-process)
    b. Claude Opus receives the sentiment signal + live crypto data + calibration stats → produces probability estimate
-3. Edge calculation: `edge = |model_prob - market_price|`
+3. Edge calculation: `edge = |model_prob - market_price|`; results ranked by edge descending
 4. `risk.ts` — checks capital limits, max positions, min edge threshold
-5. `executor.ts` — dry-runs the order, then places it if Jeet hasn't paused trading
+5. Devil's advocate eval on the top opportunity — argues the bear case before committing
+6. `executor.ts` — dry-runs the order, then places it if Jeet hasn't paused trading
 
 **Config (set via Telegram):**
 - `maxTrade` — max USDC per trade (default $8)
