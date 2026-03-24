@@ -64,6 +64,7 @@ Scheduled programs (cron via node-cron)
 - Risk management: max trade size, max deployed capital, position limits
 - Always dry-runs before placing real orders
 - Edge threshold filtering — only trades with meaningful model edge
+- **Outcome feedback loop** — resolved trades stored in `data/trades.jsonl`; LLM-as-Judge review identifies calibration quality, market type patterns, and failure modes, appending dated insights to memory
 
 ### GitHub Integration
 - Repo status, PRs, issues, commit history

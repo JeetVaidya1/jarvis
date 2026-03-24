@@ -16,6 +16,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { memoryUpdate } from "./tools/memory-tool.js";
 import { loadMemory, loadDailyLog } from "./memory.js";
+import { searchMemory } from "./memory-search.js";
 import { webGetPrice } from "./tools/websearch.js";
 import {
   browserNavigate,
@@ -47,6 +48,23 @@ import {
   githubGetCommits,
   githubRunWorkflow,
 } from "./tools/github.js";
+import {
+  googleAuth,
+  calendarToday,
+  calendarUpcoming,
+  gmailTriage,
+  gmailSearch,
+} from "./tools/google.js";
+import {
+  macScreenshot,
+  macClick,
+  macType,
+  macKeyPress,
+  macOpenApp,
+  macGetFocusedApp,
+  macRunScript,
+} from "./tools/mac-computer.js";
+import { reviewOutcomes, getPerformanceSummary } from "./trading/feedback.js";
 
 const server = new McpServer({
   name: "jarvis-tools",
@@ -76,6 +94,15 @@ server.tool(
   { content: z.string(), mode: z.enum(["append", "overwrite"]) },
   async ({ content, mode }) => ({
     content: [{ type: "text" as const, text: await memoryUpdate(content, mode) }],
+  }),
+);
+
+server.tool(
+  "jarvis_memory_search",
+  "Search Jarvis memory by keywords. Returns relevant matches instead of entire memory dump.",
+  { query: z.string(), max_results: z.number().optional() },
+  async ({ query, max_results }) => ({
+    content: [{ type: "text" as const, text: await searchMemory(query, max_results) }],
   }),
 );
 
@@ -324,6 +351,170 @@ server.tool(
   { repo: z.string(), workflow_id: z.string() },
   async ({ repo, workflow_id }) => ({
     content: [{ type: "text" as const, text: await githubRunWorkflow(repo, workflow_id) }],
+  }),
+);
+
+// ── Google Calendar + Gmail tools ──
+
+server.tool(
+  "jarvis_google_auth",
+  "Start Google OAuth flow to connect Calendar and Gmail. Returns a URL to open in browser. Run once to authenticate.",
+  {},
+  async () => ({
+    content: [{ type: "text" as const, text: await googleAuth() }],
+  }),
+);
+
+server.tool(
+  "jarvis_calendar_today",
+  "Get today's calendar events (next 24 hours). Shows time, title, location, and Meet links.",
+  {},
+  async () => ({
+    content: [{ type: "text" as const, text: await calendarToday() }],
+  }),
+);
+
+server.tool(
+  "jarvis_calendar_upcoming",
+  "Get upcoming calendar events. Default: next 7 days.",
+  { days: z.number().optional().describe("Number of days to look ahead (default 7)") },
+  async ({ days }) => ({
+    content: [{ type: "text" as const, text: await calendarUpcoming(days) }],
+  }),
+);
+
+server.tool(
+  "jarvis_gmail_triage",
+  "Get unread emails from inbox with sender, subject, and preview. Use to surface action-required items.",
+  { max_emails: z.number().optional().describe("Max emails to return (default 20)") },
+  async ({ max_emails }) => ({
+    content: [{ type: "text" as const, text: await gmailTriage(max_emails) }],
+  }),
+);
+
+server.tool(
+  "jarvis_gmail_search",
+  "Search Gmail messages by query (same syntax as Gmail search bar).",
+  {
+    query: z.string().describe("Gmail search query, e.g. 'from:amazon.com' or 'subject:invoice'"),
+    max_results: z.number().optional(),
+  },
+  async ({ query, max_results }) => ({
+    content: [{ type: "text" as const, text: await gmailSearch(query, max_results) }],
+  }),
+);
+
+// ── Mac computer use tools ──
+
+server.tool(
+  "jarvis_mac_screenshot",
+  "Take a screenshot of the Mac desktop. Returns the image visually. Optionally focus a specific window.",
+  { window_title: z.string().optional().describe("Optional: capture a specific window by title") },
+  async ({ window_title }) => {
+    const result = await macScreenshot(window_title);
+    const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [
+      { type: "text" as const, text: result.text },
+    ];
+    if (result.base64) {
+      content.push({ type: "image" as const, data: result.base64, mimeType: "image/png" });
+    }
+    return { content };
+  },
+);
+
+server.tool(
+  "jarvis_mac_click",
+  "Click at screen coordinates (x, y). Requires Accessibility permissions for the terminal in System Preferences.",
+  {
+    x: z.number().describe("X coordinate in pixels"),
+    y: z.number().describe("Y coordinate in pixels"),
+    button: z.enum(["left", "right"]).optional().describe("Mouse button (default: left)"),
+  },
+  async ({ x, y, button }) => ({
+    content: [{ type: "text" as const, text: await macClick(x, y, button) }],
+  }),
+);
+
+server.tool(
+  "jarvis_mac_type",
+  "Type text at the current cursor position.",
+  { text: z.string().describe("Text to type") },
+  async ({ text }) => ({
+    content: [{ type: "text" as const, text: await macType(text) }],
+  }),
+);
+
+server.tool(
+  "jarvis_mac_key",
+  "Press a key or keyboard shortcut. Examples: 'return', 'escape', 'command+c', 'command+shift+4'.",
+  { key: z.string().describe("Key or shortcut to press") },
+  async ({ key }) => ({
+    content: [{ type: "text" as const, text: await macKeyPress(key) }],
+  }),
+);
+
+server.tool(
+  "jarvis_mac_open_app",
+  "Open a Mac application by name.",
+  { app_name: z.string().describe("Application name, e.g. 'Xcode', 'Figma', 'Notes'") },
+  async ({ app_name }) => ({
+    content: [{ type: "text" as const, text: await macOpenApp(app_name) }],
+  }),
+);
+
+server.tool(
+  "jarvis_mac_focused_app",
+  "Get the currently focused application and window title.",
+  {},
+  async () => ({
+    content: [{ type: "text" as const, text: await macGetFocusedApp() }],
+  }),
+);
+
+server.tool(
+  "jarvis_mac_run_script",
+  "Run an AppleScript on the Mac. Use for complex automation that needs direct macOS integration.",
+  { script: z.string().describe("AppleScript code to execute") },
+  async ({ script }) => ({
+    content: [{ type: "text" as const, text: await macRunScript(script) }],
+  }),
+);
+
+// ── Outcome feedback loop ──
+
+server.tool(
+  "jarvis_outcome_review",
+  "Run the LLM-as-Judge outcome review loop on resolved Polymarket trades. Loads trade history, asks Claude to identify patterns (calibration, market types, failure modes), and appends dated insights to MEMORY.md. Pass full:true for deep review, or omit for quick performance summary.",
+  { full: z.boolean().optional().describe("Run full LLM review (true) or just show stats (default: stats only)") },
+  async ({ full }) => {
+    if (full) {
+      const report = await reviewOutcomes();
+      const text = [
+        `Outcome review complete.`,
+        `Resolved trades: ${report.resolvedCount}`,
+        `Win rate: ${(report.winRate * 100).toFixed(1)}%`,
+        `Brier score: ${report.brierScore.toFixed(3)}`,
+        ``,
+        `Insights appended to memory.`,
+        ``,
+        report.insights,
+      ].join("\n");
+      return { content: [{ type: "text" as const, text }] };
+    } else {
+      const summary = await getPerformanceSummary();
+      return { content: [{ type: "text" as const, text: summary }] };
+    }
+  },
+);
+
+// ── Think tool (reasoning scratchpad) ──
+
+server.tool(
+  "jarvis_think",
+  "Use this tool to think through complex problems step by step before acting. Write your reasoning here — it won't be executed. Use before multi-step decisions, trade analysis, debugging, or any task requiring careful reasoning.",
+  { thought: z.string() },
+  async ({ thought: _thought }) => ({
+    content: [{ type: "text" as const, text: "Thought noted." }],
   }),
 );
 
