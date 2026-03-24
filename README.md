@@ -57,6 +57,9 @@ Scheduled programs (cron via node-cron)
 - Web search via DuckDuckGo (no API key)
 - Fetch + read any URL
 - Real-time crypto/stock prices
+- **NewsAPI** — top headlines by category (tech, business, sports) + keyword search (`NEWS_API_KEY`)
+- **CoinGecko** — trending coins, market overview, deep coin info, DeFi token rankings (no key needed)
+- **Alpha Vantage** — stock fundamentals: company overview, earnings history, income statements, valuation multiples (`ALPHA_VANTAGE_KEY`)
 
 ### Polymarket Trading
 - Full CLOB SDK integration — orderbook, positions, P&L
@@ -128,6 +131,9 @@ jarvis/
 │   │   ├── github.ts     # GitHub operations via gh CLI
 │   │   ├── polymarket.ts # Polymarket CLOB + Data API tools
 │   │   ├── claude-code.ts # claude_code / claude_code_edit / claude_code_review
+│   │   ├── news.ts       # NewsAPI — headlines + search
+│   │   ├── coingecko.ts  # CoinGecko — trending, markets, coin info, DeFi
+│   │   ├── finance.ts    # Alpha Vantage — stock overview, earnings, income, valuation
 │   │   └── memory-tool.ts # memory_update tool
 │   └── trading/
 │       ├── index.ts      # Trading engine entry point
@@ -194,6 +200,18 @@ POLYMARKET_PROXY_ADDRESS=
 
 # GitHub (optional — fallback if gh CLI not available)
 GITHUB_TOKEN=
+
+# NewsAPI (optional — enables jarvis_news_headlines + jarvis_news_search)
+# Free tier: 100 req/day. Get key at https://newsapi.org
+NEWS_API_KEY=
+
+# Alpha Vantage (optional — enables stock fundamentals tools)
+# Free tier: 25 req/day. Get key at https://www.alphavantage.co/support/#api-key
+ALPHA_VANTAGE_KEY=
+
+# Google OAuth (optional — enables Calendar + Gmail tools)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 
 # Webhook server (optional)
 JARVIS_WEBHOOK_SECRET=your-hmac-secret
