@@ -61,6 +61,9 @@ Scheduled programs (cron via node-cron)
 - **CoinGecko** — trending coins, market overview, deep coin info, DeFi token rankings (no key needed)
 - **Alpha Vantage** — stock fundamentals: company overview, earnings history, income statements, valuation multiples (`ALPHA_VANTAGE_KEY`)
 - **Weather** — current conditions + hourly forecast for any location via wttr.in (no key needed)
+- **Brave Search** — privacy-first real web results, no tracking (`BRAVE_API_KEY`)
+- **Firecrawl** — scrape any URL or crawl a site into clean markdown; strips ads/nav/scripts (`FIRECRAWL_API_KEY`)
+- **Perplexity** — AI-powered research with cited sources; supports sonar, sonar-pro, sonar-reasoning models (`PERPLEXITY_API_KEY`)
 
 ### macOS System Monitor
 - CPU load averages (1m/5m/15m), memory (free/total), disk usage, uptime (`jarvis_sys_status`)
@@ -149,6 +152,7 @@ jarvis/
 │   │   ├── finance.ts        # Alpha Vantage — stock overview, earnings, income, valuation
 │   │   ├── system-monitor.ts # macOS system monitor — CPU, memory, disk, processes, network
 │   │   ├── imcp.ts           # iMCP — iMessage, Contacts, Reminders, Weather
+│   │   ├── research.ts       # Brave Search, Firecrawl, Perplexity
 │   │   └── memory-tool.ts    # memory_update tool
 │   └── trading/
 │       ├── index.ts      # Trading engine entry point
@@ -223,6 +227,18 @@ NEWS_API_KEY=
 # Alpha Vantage (optional — enables stock fundamentals tools)
 # Free tier: 25 req/day. Get key at https://www.alphavantage.co/support/#api-key
 ALPHA_VANTAGE_KEY=
+
+# Brave Search (optional — enables jarvis_brave_search)
+# Get key at https://brave.com/search/api/
+BRAVE_API_KEY=
+
+# Firecrawl (optional — enables jarvis_firecrawl_scrape + jarvis_firecrawl_crawl)
+# Get key at https://firecrawl.dev
+FIRECRAWL_API_KEY=
+
+# Perplexity (optional — enables jarvis_perplexity_search)
+# Get key at https://www.perplexity.ai/settings/api
+PERPLEXITY_API_KEY=
 
 # Google OAuth (optional — enables Calendar + Gmail tools)
 GOOGLE_CLIENT_ID=

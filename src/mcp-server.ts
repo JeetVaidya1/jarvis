@@ -21,6 +21,7 @@ import { webGetPrice } from "./tools/websearch.js";
 import { newsHeadlines, newsSearch } from "./tools/news.js";
 import { cryptoTrending, cryptoMarkets, cryptoCoinInfo, cryptoDefiTvl } from "./tools/coingecko.js";
 import { stockOverview, stockEarnings, stockIncomeStatement, stockValuation } from "./tools/finance.js";
+import { braveSearch, firecrawlScrape, firecrawlCrawl, perplexitySearch } from "./tools/research.js";
 import {
   browserNavigate,
   browserScreenshot,
@@ -762,6 +763,55 @@ server.tool(
   { thought: z.string() },
   async ({ thought: _thought }) => ({
     content: [{ type: "text" as const, text: "Thought noted." }],
+  }),
+);
+
+// ── Research tools ──
+
+server.tool(
+  "jarvis_brave_search",
+  "Search the web with Brave Search — privacy-first, real results, no tracking. Requires BRAVE_API_KEY.",
+  {
+    query: z.string().describe("Search query"),
+    count: z.number().optional().describe("Number of results (default 10, max 20)"),
+  },
+  async ({ query, count }) => ({
+    content: [{ type: "text" as const, text: await braveSearch(query, count) }],
+  }),
+);
+
+server.tool(
+  "jarvis_firecrawl_scrape",
+  "Scrape any URL into clean markdown — strips nav, ads, scripts. Ideal for reading articles, docs, or product pages. Requires FIRECRAWL_API_KEY.",
+  {
+    url: z.string().describe("URL to scrape"),
+  },
+  async ({ url }) => ({
+    content: [{ type: "text" as const, text: await firecrawlScrape(url) }],
+  }),
+);
+
+server.tool(
+  "jarvis_firecrawl_crawl",
+  "Crawl a website and scrape multiple pages into markdown. Follows internal links from the starting URL. Requires FIRECRAWL_API_KEY.",
+  {
+    url: z.string().describe("Starting URL to crawl from"),
+    max_pages: z.number().optional().describe("Max pages to crawl (default 5, max 20)"),
+  },
+  async ({ url, max_pages }) => ({
+    content: [{ type: "text" as const, text: await firecrawlCrawl(url, max_pages) }],
+  }),
+);
+
+server.tool(
+  "jarvis_perplexity_search",
+  "AI-powered web search with cited sources via Perplexity. Use for research questions that need current information with citations. Requires PERPLEXITY_API_KEY.",
+  {
+    query: z.string().describe("Research question or search query"),
+    model: z.string().optional().describe("Perplexity model (default: sonar). Options: sonar, sonar-pro, sonar-reasoning"),
+  },
+  async ({ query, model }) => ({
+    content: [{ type: "text" as const, text: await perplexitySearch(query, model) }],
   }),
 );
 
