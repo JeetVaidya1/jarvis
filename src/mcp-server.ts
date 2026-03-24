@@ -18,6 +18,9 @@ import { memoryUpdate } from "./tools/memory-tool.js";
 import { loadMemory, loadDailyLog } from "./memory.js";
 import { searchMemory } from "./memory-search.js";
 import { webGetPrice } from "./tools/websearch.js";
+import { newsHeadlines, newsSearch } from "./tools/news.js";
+import { cryptoTrending, cryptoMarkets, cryptoCoinInfo, cryptoDefiTvl } from "./tools/coingecko.js";
+import { stockOverview, stockEarnings, stockIncomeStatement, stockValuation } from "./tools/finance.js";
 import {
   browserNavigate,
   browserScreenshot,
@@ -505,6 +508,126 @@ server.tool(
       return { content: [{ type: "text" as const, text: summary }] };
     }
   },
+);
+
+// ── News tools ──
+
+server.tool(
+  "jarvis_news_headlines",
+  "Get top news headlines by category (technology, business, sports, health, science, entertainment, general) and country.",
+  {
+    category: z.string().optional().describe("Category: technology, business, sports, health, science, entertainment, general"),
+    country: z.string().optional().describe("2-letter country code (default: us). Options: us, ca, gb, au"),
+  },
+  async ({ category, country }) => ({
+    content: [{ type: "text" as const, text: await newsHeadlines(category, country) }],
+  }),
+);
+
+server.tool(
+  "jarvis_news_search",
+  "Search news articles by keyword across all sources. Optionally filter by date range.",
+  {
+    query: z.string().describe("Search query (e.g. 'bitcoin ETF', 'OpenAI', 'Apple earnings')"),
+    from: z.string().optional().describe("Start date in YYYY-MM-DD format"),
+    to: z.string().optional().describe("End date in YYYY-MM-DD format"),
+    page_size: z.number().optional().describe("Number of results (default 10, max 20)"),
+  },
+  async ({ query, from, to, page_size }) => ({
+    content: [{ type: "text" as const, text: await newsSearch(query, from, to, page_size) }],
+  }),
+);
+
+// ── CoinGecko crypto tools ──
+
+server.tool(
+  "jarvis_crypto_trending",
+  "Get the 7 trending coins on CoinGecko right now (based on search traffic and trading activity).",
+  {},
+  async () => ({
+    content: [{ type: "text" as const, text: await cryptoTrending() }],
+  }),
+);
+
+server.tool(
+  "jarvis_crypto_markets",
+  "Get crypto market overview — top coins ranked by market cap, volume, or 24h price change.",
+  {
+    vs_currency: z.string().optional().describe("Quote currency (default: usd)"),
+    order: z.string().optional().describe("Sort order: market_cap_desc (default), volume_desc, price_change_percentage_24h_desc"),
+    per_page: z.number().optional().describe("Number of coins (default 10, max 25)"),
+  },
+  async ({ vs_currency, order, per_page }) => ({
+    content: [{ type: "text" as const, text: await cryptoMarkets(vs_currency, order, per_page) }],
+  }),
+);
+
+server.tool(
+  "jarvis_crypto_coin",
+  "Deep info on a specific coin — price, market cap, ATH/ATL, supply, links, description. Use CoinGecko ID (e.g. bitcoin, ethereum, solana).",
+  {
+    coin_id: z.string().describe("CoinGecko coin ID (e.g. 'bitcoin', 'ethereum', 'solana', 'chainlink')"),
+  },
+  async ({ coin_id }) => ({
+    content: [{ type: "text" as const, text: await cryptoCoinInfo(coin_id) }],
+  }),
+);
+
+server.tool(
+  "jarvis_crypto_defi",
+  "Top DeFi protocol tokens by market cap — market cap, price, and 24h change.",
+  {
+    top: z.number().optional().describe("Number of DeFi tokens to return (default 10, max 25)"),
+  },
+  async ({ top }) => ({
+    content: [{ type: "text" as const, text: await cryptoDefiTvl(top) }],
+  }),
+);
+
+// ── Stock fundamentals tools ──
+
+server.tool(
+  "jarvis_stock_overview",
+  "Stock company overview — sector, market cap, P/E, EPS, dividend yield, 52-week range, beta, analyst target price.",
+  {
+    symbol: z.string().describe("Stock ticker symbol (e.g. AAPL, TSLA, NVDA)"),
+  },
+  async ({ symbol }) => ({
+    content: [{ type: "text" as const, text: await stockOverview(symbol) }],
+  }),
+);
+
+server.tool(
+  "jarvis_stock_earnings",
+  "Last 4 quarters of earnings — reported EPS vs estimated EPS and surprise percentage.",
+  {
+    symbol: z.string().describe("Stock ticker symbol (e.g. AAPL, TSLA, NVDA)"),
+  },
+  async ({ symbol }) => ({
+    content: [{ type: "text" as const, text: await stockEarnings(symbol) }],
+  }),
+);
+
+server.tool(
+  "jarvis_stock_income",
+  "Last 2 annual income statements — revenue, gross profit, operating income, net income.",
+  {
+    symbol: z.string().describe("Stock ticker symbol (e.g. AAPL, TSLA, NVDA)"),
+  },
+  async ({ symbol }) => ({
+    content: [{ type: "text" as const, text: await stockIncomeStatement(symbol) }],
+  }),
+);
+
+server.tool(
+  "jarvis_stock_valuation",
+  "Stock valuation multiples — P/E, forward P/E, PEG, price/book, price/sales, EV/EBITDA, ROE, profit margin.",
+  {
+    symbol: z.string().describe("Stock ticker symbol (e.g. AAPL, TSLA, NVDA)"),
+  },
+  async ({ symbol }) => ({
+    content: [{ type: "text" as const, text: await stockValuation(symbol) }],
+  }),
 );
 
 // ── Think tool (reasoning scratchpad) ──
