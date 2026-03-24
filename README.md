@@ -32,7 +32,7 @@ Scheduled programs (cron via node-cron)
 
 **Key design decisions:**
 - All intelligence lives in Claude — tools are thin wrappers
-- Memory is flat Markdown files (no database)
+- Memory is Markdown files + SQLite vector store for semantic search
 - Sessions are saved/restored across restarts so context survives
 - The trading engine runs as a sub-system within the same process
 - Claude Code is used for all non-trivial coding tasks (free on Max plan)
@@ -108,6 +108,8 @@ jarvis/
 │   ├── mcp-server.ts     # MCP server exposing tools to Claude Code
 │   ├── media.ts          # Photo/voice/document handling
 │   ├── memory.ts         # Read/write MEMORY.md + daily logs
+│   ├── memory-search.ts  # Semantic + keyword memory search
+│   ├── semantic-memory.ts # Vector embeddings + sqlite-vec store
 │   ├── programs.ts       # Scheduled autonomous programs
 │   ├── session.ts        # Session save/restore across restarts
 │   ├── subagent.ts       # Background sub-agent management
@@ -254,6 +256,20 @@ Types of memory:
 - **project** — active work, decisions, deadlines
 - **reference** — pointers to external resources
 
+### Semantic Search
+
+Memory search uses vector embeddings (not just keywords). When you search for "prediction market", it finds entries about Polymarket even with zero word overlap.
+
+**Stack:**
+- `@huggingface/transformers` — runs `all-MiniLM-L6-v2` (384-dim ONNX model) in-process
+- `sqlite-vec` — vector similarity extension for SQLite, zero infra
+- `better-sqlite3` — sync SQLite interface
+
+**Flow:**
+1. On memory write → chunks text by paragraph → embeds each chunk → stores in `memory/vectors.db`
+2. On memory search → embeds query → `SELECT ... WHERE embedding MATCH ? ORDER BY distance LIMIT k`
+3. Falls back to keyword search if vector store is empty (first run before any indexing)
+
 Logs are written to `logs/YYYY-MM-DD.log` and include every agent response, tool call result, and trade event.
 
 ---
@@ -282,6 +298,8 @@ node dist/mcp-server.js
 | Scheduling | node-cron |
 | MCP | @modelcontextprotocol/sdk |
 | Crypto | ethers.js v6 |
+| Embeddings | @huggingface/transformers (ONNX, in-process) |
+| Vector DB | sqlite-vec + better-sqlite3 |
 
 ---
 

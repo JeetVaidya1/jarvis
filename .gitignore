@@ -7,3 +7,4 @@ memory/*.md
 logs/
 sessions/
 .claude/
+memory/vectors.db

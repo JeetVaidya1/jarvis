@@ -1,4 +1,5 @@
-import { updateMemory, appendDailyLog } from "../memory.js";
+import { updateMemory, appendDailyLog, loadMemory } from "../memory.js";
+import { indexMemory } from "../semantic-memory.js";
 
 export async function memoryUpdate(
   content: string,
@@ -20,6 +21,11 @@ export async function memoryUpdate(
     await appendDailyLog(
       `[${timestamp}] Memory ${mode}: ${logSummary}`,
     );
+
+    // Re-index memory in the background (don't block the response)
+    loadMemory()
+      .then((fullText) => indexMemory(fullText))
+      .catch(() => { /* non-fatal */ });
 
     return `OK: Memory updated (${mode})`;
   } catch (error) {
