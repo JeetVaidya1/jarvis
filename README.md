@@ -60,6 +60,19 @@ Scheduled programs (cron via node-cron)
 - **NewsAPI** — top headlines by category (tech, business, sports) + keyword search (`NEWS_API_KEY`)
 - **CoinGecko** — trending coins, market overview, deep coin info, DeFi token rankings (no key needed)
 - **Alpha Vantage** — stock fundamentals: company overview, earnings history, income statements, valuation multiples (`ALPHA_VANTAGE_KEY`)
+- **Weather** — current conditions + hourly forecast for any location via wttr.in (no key needed)
+
+### macOS System Monitor
+- CPU load averages (1m/5m/15m), memory (free/total), disk usage, uptime (`jarvis_sys_status`)
+- Top processes by CPU (`jarvis_sys_processes`)
+- Network status: IP, interfaces, established connections (`jarvis_sys_network`)
+- All via macOS built-ins — no npm dependencies
+
+### iMCP — Native macOS Integration
+- **iMessage** — list chats, read messages, send iMessages via AppleScript (`jarvis_imessage_*`)
+- **Contacts** — search by name, returns phone + email (`jarvis_contacts_search`)
+- **Reminders** — get incomplete reminders (filtered by list), create new reminders (`jarvis_reminders_*`)
+- Requires Automation permissions in System Settings > Privacy & Security > Automation
 
 ### Polymarket Trading
 - Full CLOB SDK integration — orderbook, positions, P&L
@@ -131,10 +144,12 @@ jarvis/
 │   │   ├── github.ts     # GitHub operations via gh CLI
 │   │   ├── polymarket.ts # Polymarket CLOB + Data API tools
 │   │   ├── claude-code.ts # claude_code / claude_code_edit / claude_code_review
-│   │   ├── news.ts       # NewsAPI — headlines + search
-│   │   ├── coingecko.ts  # CoinGecko — trending, markets, coin info, DeFi
-│   │   ├── finance.ts    # Alpha Vantage — stock overview, earnings, income, valuation
-│   │   └── memory-tool.ts # memory_update tool
+│   │   ├── news.ts           # NewsAPI — headlines + search
+│   │   ├── coingecko.ts      # CoinGecko — trending, markets, coin info, DeFi
+│   │   ├── finance.ts        # Alpha Vantage — stock overview, earnings, income, valuation
+│   │   ├── system-monitor.ts # macOS system monitor — CPU, memory, disk, processes, network
+│   │   ├── imcp.ts           # iMCP — iMessage, Contacts, Reminders, Weather
+│   │   └── memory-tool.ts    # memory_update tool
 │   └── trading/
 │       ├── index.ts      # Trading engine entry point
 │       ├── engine.ts     # Main trading loop + lifecycle

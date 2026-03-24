@@ -67,6 +67,16 @@ import {
   macGetFocusedApp,
   macRunScript,
 } from "./tools/mac-computer.js";
+import { sysGetStatus, sysGetProcesses, sysGetNetwork } from "./tools/system-monitor.js";
+import {
+  iMessageGetChats,
+  iMessageGetMessages,
+  iMessageSend,
+  contactsSearch,
+  remindersGet,
+  remindersCreate,
+  weatherGet,
+} from "./tools/imcp.js";
 import { reviewOutcomes, getPerformanceSummary } from "./trading/feedback.js";
 
 const server = new McpServer({
@@ -627,6 +637,120 @@ server.tool(
   },
   async ({ symbol }) => ({
     content: [{ type: "text" as const, text: await stockValuation(symbol) }],
+  }),
+);
+
+// ── System Monitor tools ──
+
+server.tool(
+  "jarvis_sys_status",
+  "macOS system status: CPU load averages, memory (free/total), disk usage, and uptime.",
+  {},
+  async () => ({
+    content: [{ type: "text" as const, text: await sysGetStatus() }],
+  }),
+);
+
+server.tool(
+  "jarvis_sys_processes",
+  "Top processes by CPU usage on macOS. Shows PID, CPU%, memory%, and process name.",
+  {
+    limit: z.number().int().min(5).max(30).optional().describe("Number of processes to show (default: 10)"),
+  },
+  async ({ limit }) => ({
+    content: [{ type: "text" as const, text: await sysGetProcesses(limit ?? 10) }],
+  }),
+);
+
+server.tool(
+  "jarvis_sys_network",
+  "macOS network status: primary IP, active interfaces, and established connection count.",
+  {},
+  async () => ({
+    content: [{ type: "text" as const, text: await sysGetNetwork() }],
+  }),
+);
+
+// ── iMCP tools ──
+
+server.tool(
+  "jarvis_imessage_chats",
+  "List recent iMessage/SMS conversations from the Messages app.",
+  {
+    limit: z.number().int().min(1).max(50).optional().describe("Max conversations to list (default: 10)"),
+  },
+  async ({ limit }) => ({
+    content: [{ type: "text" as const, text: await iMessageGetChats(limit ?? 10) }],
+  }),
+);
+
+server.tool(
+  "jarvis_imessage_read",
+  "Read recent messages from a specific iMessage contact or group chat.",
+  {
+    contact: z.string().describe("Contact name, phone number, or partial chat name to search for"),
+    limit: z.number().int().min(1).max(50).optional().describe("Number of messages to retrieve (default: 10)"),
+  },
+  async ({ contact, limit }) => ({
+    content: [{ type: "text" as const, text: await iMessageGetMessages(contact, limit ?? 10) }],
+  }),
+);
+
+server.tool(
+  "jarvis_imessage_send",
+  "Send an iMessage to a contact. Recipient must be an iMessage-capable phone number or Apple ID email. ALWAYS confirm with Jeet before sending.",
+  {
+    recipient: z.string().describe("Phone number (+1...) or Apple ID email of the recipient"),
+    message: z.string().describe("Message text to send"),
+  },
+  async ({ recipient, message }) => ({
+    content: [{ type: "text" as const, text: await iMessageSend(recipient, message) }],
+  }),
+);
+
+server.tool(
+  "jarvis_contacts_search",
+  "Search macOS Contacts by name. Returns phone number and email for matching contacts.",
+  {
+    query: z.string().describe("Name or partial name to search for"),
+  },
+  async ({ query }) => ({
+    content: [{ type: "text" as const, text: await contactsSearch(query) }],
+  }),
+);
+
+server.tool(
+  "jarvis_reminders_get",
+  "Get incomplete reminders from macOS Reminders app. Optionally filter by list name.",
+  {
+    list: z.string().optional().describe("List name to filter by (e.g. 'Work', 'Personal'). Omit for all lists."),
+  },
+  async ({ list }) => ({
+    content: [{ type: "text" as const, text: await remindersGet(list) }],
+  }),
+);
+
+server.tool(
+  "jarvis_reminders_create",
+  "Create a new reminder in macOS Reminders app.",
+  {
+    title: z.string().describe("Reminder title/text"),
+    list: z.string().optional().describe("List to add to (default: 'Reminders')"),
+    due_date: z.string().optional().describe("Due date as natural string, e.g. 'March 25, 2026 9:00 AM'"),
+  },
+  async ({ title, list, due_date }) => ({
+    content: [{ type: "text" as const, text: await remindersCreate(title, list ?? "Reminders", due_date) }],
+  }),
+);
+
+server.tool(
+  "jarvis_weather",
+  "Current weather and today's forecast for any location. Defaults to Kelowna, BC. No API key needed.",
+  {
+    location: z.string().optional().describe("City name or 'City,Region' (default: 'Kelowna,BC')"),
+  },
+  async ({ location }) => ({
+    content: [{ type: "text" as const, text: await weatherGet(location ?? "Kelowna,BC") }],
   }),
 );
 
