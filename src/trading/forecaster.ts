@@ -12,6 +12,8 @@ import { createLogger } from "../logger.js";
 import { shellExec } from "../tools/shell.js";
 import type { ScoredMarket } from "./scanner.js";
 import { join, dirname } from "node:path";
+import { getCalibrationStats } from "./outcomes.js";
+import { classifySentiment, formatSentimentSignal } from "./sentiment.js";
 
 interface CryptoPrice {
   symbol: string;
@@ -83,6 +85,71 @@ function escapeForHeredoc(str: string): string {
 }
 
 /**
+ * Devil's advocate eval — argues the bear case against a proposed trade.
+ * Returns true (proceed) or false (skip).
+ */
+export async function evalTrade(
+  market: ScoredMarket,
+  prediction: Prediction,
+): Promise<{ proceed: boolean; reason: string }> {
+  const side = prediction.side;
+  const opposingSide = side === "YES" ? "NO" : "YES";
+  const modelConfPct = (prediction.probability * 100).toFixed(1);
+  const marketPricePct = (market.yesPrice * 100).toFixed(1);
+
+  const prompt = escapeForHeredoc(`You are a professional risk manager reviewing a proposed prediction market trade.
+
+PROPOSED TRADE:
+- Market: "${market.question}"
+- Our model says: ${side} @ ${modelConfPct}% probability
+- Current market price: YES=${marketPricePct}%
+- Model reasoning: ${prediction.reasoning}
+
+YOUR JOB: Be the devil's advocate. Argue the STRONGEST possible case AGAINST this trade.
+
+Consider:
+1. What could our model be systematically wrong about?
+2. What information might the market have that we don't?
+3. Is there any overconfidence risk? (>85% confidence should be rare)
+4. Are there market-specific risks (low liquidity, manipulation, unclear resolution)?
+5. Would you personally fade this trade?
+
+After your bear case argument, give a verdict:
+VERDICT: PROCEED (bear case is weak, trade stands) or SKIP (bear case is compelling)
+REASON: [one sentence]`);
+
+  try {
+    const command = [
+      "claude", "-p",
+      "--model", "sonnet",
+      "--dangerously-skip-permissions",
+      "--no-session-persistence",
+      `<<'FORECAST_EOF'\n${prompt}\nFORECAST_EOF`,
+    ].join(" ");
+
+    const forecastEnv = { ...process.env, ANTHROPIC_API_KEY: undefined };
+    const result = await shellExec(command, PROJECT_ROOT, 90_000, forecastEnv);
+
+    if (result.startsWith("ERROR")) {
+      log.warn(`Eval agent failed: ${result.slice(0, 80)} — proceeding anyway`);
+      return { proceed: true, reason: "Eval unavailable" };
+    }
+
+    const verdictMatch = result.match(/VERDICT:\s*(PROCEED|SKIP)/i);
+    const reasonMatch = result.match(/REASON:\s*(.+)/i);
+    const verdict = verdictMatch?.[1]?.toUpperCase() ?? "PROCEED";
+    const reason = reasonMatch?.[1]?.trim() ?? result.slice(-200);
+
+    log.info(`Eval agent: ${verdict} — ${reason.slice(0, 100)}`);
+    return { proceed: verdict === "PROCEED", reason };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.warn(`Eval agent error: ${msg} — proceeding anyway`);
+    return { proceed: true, reason: "Eval error" };
+  }
+}
+
+/**
  * Forecast a market using Opus 4.6 with anti-anchoring.
  * Returns null if Claude can't make a confident prediction.
  */
@@ -95,6 +162,37 @@ export async function forecast(market: ScoredMarket): Promise<Prediction | null>
       liveDataBlock = `\n\n${ctx}\n`;
       log.info(`Injected live crypto data for: ${market.question.slice(0, 50)}`);
     }
+  }
+
+  // Local ML sentiment — fast pre-signal, no LLM needed
+  let sentimentBlock = "";
+  try {
+    const sentiment = await classifySentiment(market.question);
+    sentimentBlock = `\n${formatSentimentSignal(sentiment)}\n`;
+    log.info(`Sentiment: ${sentiment.label} (${(sentiment.score * 100).toFixed(0)}%) for "${market.question.slice(0, 50)}"`);
+  } catch {
+    // Non-fatal — forecaster works without it
+  }
+
+  // Load calibration stats to help model self-correct
+  const calibration = await getCalibrationStats(30);
+  let calibrationBlock = "";
+  if (calibration.resolvedTrades >= 3) {
+    const recentLines = calibration.recentCalls
+      .filter((c) => c.result)
+      .slice(-5)
+      .map((c) => `  - ${c.side} "${c.market.slice(0, 50)}" | Model: ${(c.modelProb * 100).toFixed(0)}% | Outcome: ${c.result}`)
+      .join("\n");
+
+    calibrationBlock = `
+RECENT PERFORMANCE CONTEXT (use to recalibrate your confidence):
+- Win rate: ${(calibration.winRate * 100).toFixed(0)}% over ${calibration.resolvedTrades} resolved trades
+- Average edge claimed: ${(calibration.avgEdgeClaimed * 100).toFixed(1)}%
+- Brier score: ${calibration.brierScore.toFixed(3)} (0.25 = random, lower is better)
+- Recent calls:\n${recentLines || "  (none yet)"}
+
+If win rate is below 50% or Brier score is above 0.25, be MORE conservative and widen your uncertainty.
+`;
   }
 
   // ANTI-ANCHORING: deliberately withhold the market price
@@ -111,8 +209,9 @@ IMPORTANT RULES:
 THE QUESTION:
 "${market.question}"
 ${liveDataBlock}
+${sentimentBlock}
 ${market.isFastMarket ? "NOTE: This is a fast-resolving market (resolves within minutes/hours). Focus on current conditions and momentum, not long-term analysis." : ""}
-
+${calibrationBlock}
 Analyze from THREE perspectives:
 1. BASE RATE: What's the historical base rate for this type of event?
 2. EVIDENCE: What current evidence shifts the probability from the base rate?
