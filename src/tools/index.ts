@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { logEvent } from "../dashboard.js";
 import { shellExec } from "./shell.js";
 import { fileRead, fileWrite } from "./files.js";
 import { memoryUpdate } from "./memory-tool.js";
@@ -39,6 +40,7 @@ import {
   claudeCodeEdit,
   claudeCodeReview,
 } from "./claude-code.js";
+import { searchMemory } from "../memory-search.js";
 import {
   githubStatus,
   githubGetPrs,
@@ -718,6 +720,43 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       required: ["task", "project_dir"],
     },
   },
+  // ── Think tool (reasoning scratchpad) ──
+  {
+    name: "think",
+    description:
+      "Use this tool to think through complex problems step by step before acting. Write your reasoning here — it won't be shown to Jeet or executed. Use it before multi-step decisions, trade analysis, debugging, or any task requiring careful reasoning.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        thought: {
+          type: "string",
+          description: "Your internal reasoning, analysis, or planning notes",
+        },
+      },
+      required: ["thought"],
+    },
+  },
+
+  // ── Memory search tool ──
+  {
+    name: "memory_search",
+    description:
+      "Search Jarvis's long-term memory and today's log by keywords. Returns relevant matching entries instead of the entire memory. Use this instead of reading all memory when you need to find specific information (e.g. 'trade history', 'phantom defender', 'ESP32').",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "Keywords to search for (space-separated, case-insensitive)",
+        },
+        max_results: {
+          type: "number",
+          description: "Max number of matches to return (default 20)",
+        },
+      },
+      required: ["query"],
+    },
+  },
 ] as const;
 
 // ── Input interfaces ──
@@ -841,6 +880,11 @@ interface GithubRunWorkflowInput {
   workflow_id: string;
 }
 
+interface MemorySearchInput {
+  query: string;
+  max_results?: number;
+}
+
 // ── Tool result types ──
 
 export interface ToolResult {
@@ -848,7 +892,7 @@ export interface ToolResult {
   base64Image?: string;
 }
 
-export async function executeTool(
+async function executeToolImpl(
   toolName: string,
   toolInput: Record<string, unknown>,
 ): Promise<ToolResult> {
@@ -1045,7 +1089,56 @@ export async function executeTool(
       return { text: await claudeCodeReview(input.task, input.project_dir, { model: input.model }) };
     }
 
+    case "think": {
+      // No-op reasoning scratchpad — Claude uses this to think before acting
+      return { text: "Thought noted." };
+    }
+
+    case "memory_search": {
+      const input = toolInput as unknown as MemorySearchInput;
+      return { text: await searchMemory(input.query, input.max_results) };
+    }
+
     default:
       return { text: `ERROR: Unknown tool '${toolName}'` };
+  }
+}
+
+export async function executeTool(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+): Promise<ToolResult> {
+  // Build a brief summary from the most relevant input field
+  const summaryInput = (
+    (toolInput["command"] as string | undefined) ??
+    (toolInput["query"] as string | undefined) ??
+    (toolInput["url"] as string | undefined) ??
+    (toolInput["task"] as string | undefined) ??
+    (toolInput["prompt"] as string | undefined) ??
+    (toolInput["path"] as string | undefined) ??
+    JSON.stringify(toolInput).slice(0, 80)
+  );
+
+  try {
+    const result = await executeToolImpl(toolName, toolInput);
+    const isError = result.text.startsWith("ERROR");
+    logEvent({
+      type: "tool_call",
+      tool: toolName,
+      summary: String(summaryInput).slice(0, 120),
+      detail: { input: toolInput },
+      status: isError ? "error" : "ok",
+    });
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logEvent({
+      type: "tool_call",
+      tool: toolName,
+      summary: String(summaryInput).slice(0, 120),
+      detail: { input: toolInput, error: message },
+      status: "error",
+    });
+    throw err;
   }
 }

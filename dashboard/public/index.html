@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jarvis Command Center</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <link rel="stylesheet" href="css/builder.css">
+  <link rel="stylesheet" href="css/themes.css">
+</head>
+<body data-mode="view">
+  <!-- Header -->
+  <header class="builder-header">
+    <div class="header-left">
+      <span style="font-size:18px;font-weight:700;color:#e6edf3;letter-spacing:-0.5px;">⚡ Jarvis</span>
+      <nav class="header-nav" id="header-nav">
+        <span style="color:#8b949e;font-size:13px;">Jarvis Command Center</span>
+      </nav>
+    </div>
+    <div class="header-center">
+      <div class="theme-selector">
+        <label>Theme:</label>
+        <select id="theme-select">
+          <option value="default">🌙 Default (Dark)</option>
+          <option value="feminine">🌸 Feminine</option>
+          <option value="feminine-dark">💜 Feminine Dark</option>
+          <option value="terminal">💻 Terminal</option>
+          <option value="paper">📜 Paper</option>
+        </select>
+      </div>
+      <label>Font Scale:</label>
+      <select id="font-scale">
+        <option value="0.8">80%</option>
+        <option value="1" selected>100%</option>
+        <option value="1.25">125%</option>
+        <option value="1.5">150%</option>
+        <option value="1.75">175%</option>
+        <option value="2">200%</option>
+      </select>
+      <label>Canvas Size:</label>
+      <select id="canvas-size">
+        <optgroup label="Standard Displays">
+          <option value="1920x1080" selected>1920×1080 (1080p)</option>
+          <option value="2560x1440">2560×1440 (1440p)</option>
+          <option value="3840x2160">3840×2160 (4K)</option>
+          <option value="1280x720">1280×720 (720p)</option>
+        </optgroup>
+        <optgroup label="Laptops">
+          <option value="1366x768">1366×768 (Common Laptop)</option>
+          <option value="1536x864">1536×864 (Laptop)</option>
+          <option value="1440x900">1440×900 (MacBook)</option>
+        </optgroup>
+        <optgroup label="Tablets & Small">
+          <option value="1280x800">1280×800 (10" Tablet)</option>
+          <option value="1024x768">1024×768 (iPad/Small)</option>
+          <option value="1024x600">1024×600 (10" Netbook)</option>
+          <option value="800x480">800×480 (7" Display)</option>
+        </optgroup>
+        <optgroup label="Ultrawide">
+          <option value="2560x1080">2560×1080 (Ultrawide)</option>
+          <option value="3440x1440">3440×1440 (Ultrawide QHD)</option>
+        </optgroup>
+        <optgroup label="Portrait Mode">
+          <option value="1080x1920">1080×1920 (Portrait 1080p)</option>
+          <option value="768x1024">768×1024 (Portrait Tablet)</option>
+        </optgroup>
+        <option value="custom">Custom...</option>
+        <optgroup label="Special">
+          <option value="scrollable">Full Page (Scrollable)</option>
+        </optgroup>
+      </select>
+      <input type="number" id="custom-width" placeholder="Width" style="display:none; width:80px;">
+      <span id="custom-x" style="display:none;">×</span>
+      <input type="number" id="custom-height" placeholder="Height" style="display:none; width:80px;">
+    </div>
+    <div class="header-right">
+      <button class="btn btn-secondary" id="btn-servers">🖥️ Servers</button>
+      <button class="btn btn-secondary" id="btn-security">🔒 Security</button>
+      <button class="btn btn-secondary" id="btn-templates">📋 Templates</button>
+      <button class="btn btn-secondary" id="btn-export-template">📦 Export Template</button>
+      <button class="btn btn-secondary" id="btn-clear">Clear All</button>
+      <button class="btn btn-secondary" id="btn-preview">Preview</button>
+      <button class="btn btn-primary" id="btn-save">💾 Save</button>
+      <button class="btn btn-done" id="btn-done-editing">✓ Done</button>
+    </div>
+  </header>
+
+  <!-- Edit button for view mode (fixed position) -->
+  <button id="btn-edit-layout" class="btn btn-primary edit-layout-btn">Edit Layout</button>
+
+  <!-- Empty dashboard hint (view mode only) -->
+  <div class="view-empty-hint">
+    <div class="hint-icon">⚡</div>
+    <div class="hint-text">Your Jarvis dashboard is empty</div>
+    <div class="hint-shortcut">Press <kbd>Ctrl</kbd> + <kbd>E</kbd> to add widgets</div>
+  </div>
+
+  <div class="builder-main">
+    <!-- Widget Library Panel -->
+    <aside class="widget-panel">
+      <h3>📦 Widgets</h3>
+
+      <div class="widget-sections">
+      <!-- Basics -->
+      <div class="widget-section">
+        <h4>📌 Basics</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="weather">
+            <span class="widget-icon">🌡️</span>
+            <span class="widget-name">Local Weather</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="weather-multi">
+            <span class="widget-icon">🌍</span>
+            <span class="widget-name">World Weather</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="clock">
+            <span class="widget-icon">🕐</span>
+            <span class="widget-name">Clock</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="world-clock">
+            <span class="widget-icon">🌍</span>
+            <span class="widget-name">World Clock</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="countdown">
+            <span class="widget-icon">⏳</span>
+            <span class="widget-name">Countdown</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- System Monitoring -->
+      <div class="widget-section">
+        <h4>💻 System</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="cpu-memory">
+            <span class="widget-icon">💻</span>
+            <span class="widget-name">CPU / Memory</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="disk-usage">
+            <span class="widget-icon">💾</span>
+            <span class="widget-name">Disk Usage</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="network-speed">
+            <span class="widget-icon">🌐</span>
+            <span class="widget-name">Network Speed</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="docker-containers">
+            <span class="widget-icon">🐳</span>
+            <span class="widget-name">Docker</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="uptime-monitor">
+            <span class="widget-icon">📡</span>
+            <span class="widget-name">Uptime Monitor</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Health -->
+      <div class="widget-section">
+        <h4>❤️ Health</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="sleep-ring">
+            <span class="widget-icon">😴</span>
+            <span class="widget-name">Sleep Score</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Jarvis -->
+      <div class="widget-section">
+        <h4>⚡ Jarvis</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="jarvis-feed">
+            <span class="widget-icon">📡</span>
+            <span class="widget-name">Activity Feed</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="jarvis-agents">
+            <span class="widget-icon">🤖</span>
+            <span class="widget-name">Sub-Agents</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="jarvis-neural">
+            <span class="widget-icon">🧠</span>
+            <span class="widget-name">Neural Map</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="jarvis-stats">
+            <span class="widget-icon">📊</span>
+            <span class="widget-name">Jarvis Stats</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="jarvis-polymarket">
+            <span class="widget-icon">📈</span>
+            <span class="widget-name">Polymarket</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="jarvis-portfolio">
+            <span class="widget-icon">💼</span>
+            <span class="widget-name">Portfolio P&amp;L</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="jarvis-imessage">
+            <span class="widget-icon">💬</span>
+            <span class="widget-name">iMessage Feed</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- OpenClaw -->
+      <div class="widget-section">
+        <h4>🐾 OpenClaw</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="auth-status">
+            <span class="widget-icon">🔐</span>
+            <span class="widget-name">Auth Status</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="lobsterboard-release">
+            <span class="widget-icon">🦞</span>
+            <span class="widget-name">LobsterBoard Release</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="openclaw-release">
+            <span class="widget-icon">🦞</span>
+            <span class="widget-name">OpenClaw Release</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="release">
+            <span class="widget-icon">📦</span>
+            <span class="widget-name">Release</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="activity-list">
+            <span class="widget-icon">📋</span>
+            <span class="widget-name">Activity List</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="cron-jobs">
+            <span class="widget-icon">⏰</span>
+            <span class="widget-name">Cron Jobs</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="system-log">
+            <span class="widget-icon">🔧</span>
+            <span class="widget-name">System Log</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI / LLM -->
+      <div class="widget-section">
+        <h4>🤖 AI / LLM</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="ai-usage">
+            <span class="widget-icon">🤖</span>
+            <span class="widget-name">AI Usage</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="claude-code">
+            <span class="widget-icon">🟣</span>
+            <span class="widget-name">Claude Code</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="codex-cli">
+            <span class="widget-icon">🟢</span>
+            <span class="widget-name">Codex CLI</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="github-copilot">
+            <span class="widget-icon">⚫</span>
+            <span class="widget-name">GitHub Copilot</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="cursor">
+            <span class="widget-icon">🔵</span>
+            <span class="widget-name">Cursor</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="gemini-cli">
+            <span class="widget-icon">🔷</span>
+            <span class="widget-name">Gemini CLI</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="amp-code">
+            <span class="widget-icon">⚡</span>
+            <span class="widget-name">Amp Code</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="factory">
+            <span class="widget-icon">🏭</span>
+            <span class="widget-name">Factory</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="kimi-code">
+            <span class="widget-icon">🌙</span>
+            <span class="widget-name">Kimi Code</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="jetbrains-ai">
+            <span class="widget-icon">🧠</span>
+            <span class="widget-name">JetBrains AI</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="minimax">
+            <span class="widget-icon">🔶</span>
+            <span class="widget-name">MiniMax</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="zai">
+            <span class="widget-icon">🇿</span>
+            <span class="widget-name">Z.ai</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="antigravity-local">
+            <span class="widget-icon">🪐</span>
+            <span class="widget-name">Antigravity</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="ai-cost-tracker">
+            <span class="widget-icon">💰</span>
+            <span class="widget-name">Cost Tracker</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="api-status">
+            <span class="widget-icon">🔄</span>
+            <span class="widget-name">API Status</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="session-count">
+            <span class="widget-icon">💬</span>
+            <span class="widget-name">Active Sessions</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="token-gauge">
+            <span class="widget-icon">📊</span>
+            <span class="widget-name">Token Gauge</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Productivity -->
+      <div class="widget-section">
+        <h4>📋 Productivity</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="todo-list">
+            <span class="widget-icon">✅</span>
+            <span class="widget-name">Todo List</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="calendar">
+            <span class="widget-icon">📅</span>
+            <span class="widget-name">Calendar</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="email-count">
+            <span class="widget-icon">📧</span>
+            <span class="widget-name">Unread Emails</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="pomodoro">
+            <span class="widget-icon">🎯</span>
+            <span class="widget-name">Pomodoro</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="notes">
+            <span class="widget-icon">📝</span>
+            <span class="widget-name">Notes</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="github-stats">
+            <span class="widget-icon">🐙</span>
+            <span class="widget-name">GitHub Stats</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Finance -->
+      <div class="widget-section">
+        <h4>💵 Finance</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="stock-ticker">
+            <span class="widget-icon">📈</span>
+            <span class="widget-name">Stock Ticker</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="crypto-price">
+            <span class="widget-icon">₿</span>
+            <span class="widget-name">Crypto Price</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entertainment -->
+      <div class="widget-section">
+        <h4>🎵 Entertainment</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="quote-of-day">
+            <span class="widget-icon">💭</span>
+            <span class="widget-name">Quote of Day</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="widget-section">
+        <h4>🔗 Content</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="pages-menu">
+            <span class="widget-icon">📄</span>
+            <span class="widget-name">Pages Menu</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="quick-links">
+            <span class="widget-icon">🔗</span>
+            <span class="widget-name">Quick Links</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="image-local">
+            <span class="widget-icon">🖼️</span>
+            <span class="widget-name">Image</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="image-embed">
+            <span class="widget-icon">🌐</span>
+            <span class="widget-name">Web Image</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="image-random">
+            <span class="widget-icon">🎲</span>
+            <span class="widget-name">Random Image</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="image-latest">
+            <span class="widget-icon">🆕</span>
+            <span class="widget-name">Latest Image</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="iframe-embed">
+            <span class="widget-icon">🌐</span>
+            <span class="widget-name">Iframe Embed</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layout -->
+      <div class="widget-section">
+        <h4>📐 Layout</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="text-header">
+            <span class="widget-icon">🔤</span>
+            <span class="widget-name">Header / Text</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="horizontal-line">
+            <span class="widget-icon">➖</span>
+            <span class="widget-name">Horizontal Line</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+          <div class="widget-item" draggable="true" data-widget="vertical-line">
+            <span class="widget-icon">│</span>
+            <span class="widget-name">Vertical Line</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bars -->
+      <div class="widget-section">
+        <h4>📊 Bars</h4>
+        <div class="widget-list">
+          <div class="widget-item" draggable="true" data-widget="rss-ticker">
+            <span class="widget-icon">📡</span>
+            <span class="widget-name">RSS Ticker</span>
+            <span class="widget-verified" title="Tested & Verified">✓</span>
+          </div>
+        </div>
+      </div>
+      </div><!-- end widget-sections -->
+    </aside>
+
+    <!-- Canvas Area -->
+    <main class="canvas-area">
+      <div class="canvas-wrapper" id="canvas-wrapper">
+        <div class="canvas" id="canvas" data-width="1920" data-height="1080" style="width:1920px;height:1080px;">
+          <div class="canvas-grid"></div>
+          <div class="drop-hint">Drag widgets here</div>
+        </div>
+      </div>
+      <div class="canvas-info">
+        <span id="canvas-dimensions">1920 × 1080</span>
+        <span id="widget-count">0 widgets</span>
+        <div class="zoom-controls" style="display:flex;align-items:center;gap:6px;">
+          <button onclick="zoomOut()" style="background:none;border:none;color:#8b949e;font-size:16px;cursor:pointer;padding:4px 8px;" title="Zoom Out">-</button>
+          <span id="zoom-level" style="color:#8b949e;font-size:12px;min-width:40px;text-align:center;">50%</span>
+          <button onclick="zoomIn()" style="background:none;border:none;color:#8b949e;font-size:16px;cursor:pointer;padding:4px 8px;" title="Zoom In">+</button>
+          <button onclick="zoomFit()" style="background:none;border:none;color:#8b949e;font-size:14px;cursor:pointer;padding:4px 8px;" title="Fit to Screen">⊡</button>
+          <button onclick="zoom100()" style="background:none;border:none;color:#8b949e;font-size:11px;cursor:pointer;padding:4px 8px;" title="100%">1:1</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Properties Panel -->
+    <aside class="properties-panel" id="properties-panel">
+      <h3>⚙️ Properties</h3>
+      <div class="no-selection">
+        <p>Select a widget to edit its properties</p>
+      </div>
+      <div class="properties-form" id="properties-form" style="display:none;">
+        <div class="prop-group">
+          <label>Widget Type</label>
+          <input type="text" id="prop-type" readonly>
+        </div>
+        <div class="prop-group" id="prop-title-group">
+          <label id="prop-title-label">Title</label>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="text" id="prop-title" placeholder="Widget title" style="flex:1;">
+            <input type="checkbox" id="prop-show-header" checked style="width:auto;">
+            <label for="prop-show-header" style="margin:0;cursor:pointer;white-space:nowrap;font-size:11px;">Show</label>
+          </div>
+          <small id="prop-title-hint" style="display:none;"></small>
+        </div>
+        <div class="prop-group">
+          <label>Position</label>
+          <div class="prop-row">
+            <input type="number" id="prop-x" placeholder="X">
+            <input type="number" id="prop-y" placeholder="Y">
+          </div>
+        </div>
+        <div class="prop-group">
+          <label>Size</label>
+          <div class="prop-row">
+            <input type="number" id="prop-width" placeholder="W">
+            <input type="number" id="prop-height" placeholder="H">
+          </div>
+        </div>
+        <div class="prop-group" id="prop-location-group" style="display:none;">
+          <label>Location</label>
+          <input type="text" id="prop-location" placeholder="City name or City, Country">
+          <small>e.g. Atlanta or Paris, FR</small>
+        </div>
+        <div class="prop-group" id="prop-locations-group" style="display:none;">
+          <label>Locations</label>
+          <input type="text" id="prop-locations" placeholder="New York; London; Tokyo">
+          <small>Semicolon-separated. Use "City, Country" for duplicates</small>
+        </div>
+        <div class="prop-group" id="prop-units-group" style="display:none;">
+          <label>Units</label>
+          <select id="prop-units">
+            <option value="F">Fahrenheit (°F)</option>
+            <option value="C">Celsius (°C)</option>
+          </select>
+        </div>
+        <div class="prop-group" id="prop-timeformat-group" style="display:none;">
+          <label>Time Format</label>
+          <select id="prop-timeformat">
+            <option value="12h">12 Hour (3:45 PM)</option>
+            <option value="24h">24 Hour (15:45)</option>
+          </select>
+        </div>
+        <div class="prop-group" id="prop-targetdate-group" style="display:none;">
+          <label>Target Date</label>
+          <input type="date" id="prop-targetdate">
+        </div>
+        <div class="prop-group" id="prop-countdown-options-group" style="display:none;">
+          <label>Display Options</label>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="prop-show-hours" style="width:auto;">
+              <label for="prop-show-hours" style="margin:0;cursor:pointer;font-size:12px;">Show Hours</label>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="prop-show-minutes" style="width:auto;">
+              <label for="prop-show-minutes" style="margin:0;cursor:pointer;font-size:12px;">Show Minutes</label>
+            </div>
+          </div>
+        </div>
+        <div class="prop-group" id="prop-fontsize-group" style="display:none;">
+          <label>Font Size (px)</label>
+          <input type="number" id="prop-fontsize" min="8" max="120" placeholder="24">
+        </div>
+        <div class="prop-group" id="prop-fontcolor-group" style="display:none;">
+          <label>Font Color</label>
+          <input type="color" id="prop-fontcolor" value="#e6edf3" style="width:100%;height:32px;border:none;cursor:pointer;">
+        </div>
+        <div class="prop-group" id="prop-textalign-group" style="display:none;">
+          <label>Alignment</label>
+          <select id="prop-textalign">
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
+          </select>
+        </div>
+        <div class="prop-group" id="prop-fontweight-group" style="display:none;">
+          <label>Font Weight</label>
+          <select id="prop-fontweight">
+            <option value="normal">Normal</option>
+            <option value="bold">Bold</option>
+            <option value="lighter">Light</option>
+          </select>
+        </div>
+        <div class="prop-group" id="prop-showborder-group" style="display:none;">
+          <label>Border</label>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="prop-showborder" style="width:auto;">
+            <label for="prop-showborder" style="margin:0;cursor:pointer;font-size:12px;">Show Border</label>
+          </div>
+        </div>
+        <div class="prop-group" id="prop-linecolor-group" style="display:none;">
+          <label>Line Color</label>
+          <input type="color" id="prop-linecolor" value="#30363d" style="width:100%;height:32px;border:none;cursor:pointer;">
+        </div>
+        <div class="prop-group" id="prop-linethickness-group" style="display:none;">
+          <label>Line Thickness (px)</label>
+          <input type="number" id="prop-linethickness" min="1" max="20" placeholder="2">
+        </div>
+        <div class="prop-group" id="prop-feedurl-group" style="display:none;">
+          <label>Feed URL</label>
+          <input type="text" id="prop-feedurl" placeholder="https://example.com/feed.xml" style="width:100%;padding:6px 8px;background:var(--bg-secondary,#0d1117);border:1px solid var(--border,#30363d);border-radius:4px;color:var(--text,#e6edf3);font-size:12px;">
+        </div>
+        <div class="prop-group" id="prop-columns-group" style="display:none;">
+          <label>Columns</label>
+          <select id="prop-columns">
+            <option value="1">1 Column</option>
+            <option value="2">2 Columns</option>
+          </select>
+        </div>
+        <div class="prop-group" id="prop-pomodoro-group" style="display:none;">
+          <label>Timer Settings</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="flex:1;">
+              <small style="display:block;margin-bottom:2px;">Work (min)</small>
+              <input type="number" id="prop-work-minutes" min="1" max="120" style="width:100%;">
+            </div>
+            <div style="flex:1;">
+              <small style="display:block;margin-bottom:2px;">Break (min)</small>
+              <input type="number" id="prop-break-minutes" min="1" max="60" style="width:100%;">
+            </div>
+          </div>
+        </div>
+        <div class="prop-group" id="prop-imagepath-group" style="display:none;">
+          <label>Image</label>
+          <input type="file" id="prop-imagefile" accept="image/*" style="margin-bottom:8px;">
+          <input type="text" id="prop-imagepath" placeholder="Or enter path: images/photo.jpg">
+          <small>Browse to embed, or enter relative path</small>
+        </div>
+        <div class="prop-group" id="prop-imageurl-group" style="display:none;">
+          <label>Image URL</label>
+          <input type="text" id="prop-imageurl" placeholder="https://example.com/image.jpg">
+        </div>
+        <div class="prop-group" id="prop-imagelist-group" style="display:none;">
+          <label>Images</label>
+          <input type="file" id="prop-imagelist-file" accept="image/*" multiple style="margin-bottom:8px;">
+          <small>Select images to add to the rotation</small>
+          <div id="prop-imagelist-items" style="margin-top:8px;max-height:150px;overflow-y:auto;"></div>
+        </div>
+        <div class="prop-group" id="prop-quicklinks-group" style="display:none;">
+          <label>Links</label>
+          <div style="display:flex;gap:4px;margin-bottom:8px;">
+            <input type="text" id="prop-link-name" placeholder="Name" style="flex:1;">
+            <input type="text" id="prop-link-url" placeholder="https://..." style="flex:2;">
+            <button type="button" id="prop-link-add" style="padding:4px 8px;cursor:pointer;">+</button>
+          </div>
+          <div id="prop-quicklinks-items" style="max-height:150px;overflow-y:auto;"></div>
+        </div>
+        <div class="prop-group" id="prop-layout-group" style="display:none;">
+          <label>Menu Direction</label>
+          <select id="prop-layout">
+            <option value="vertical">Vertical</option>
+            <option value="horizontal">Horizontal</option>
+          </select>
+        </div>
+        <div class="prop-group" id="prop-embedurl-group" style="display:none;">
+          <label>Embed URL</label>
+          <input type="text" id="prop-embedurl" placeholder="https://example.com">
+          <small>URL to embed in iframe</small>
+        </div>
+        <div class="prop-group" id="prop-release-group" style="display:none;">
+          <label>GitHub Repo</label>
+          <input type="text" id="prop-repo" placeholder="owner/repo">
+          <small style="margin-bottom:8px;display:block;">e.g. openclaw/openclaw</small>
+          <label>Your Version</label>
+          <input type="text" id="prop-currentversion" placeholder="v1.0.0">
+          <small>Leave blank to just show latest</small>
+        </div>
+        <div class="prop-group" id="prop-github-group" style="display:none;">
+          <label>GitHub Username / Org</label>
+          <input type="text" id="prop-gh-username" placeholder="openclaw">
+          <label style="margin-top:8px;">Repository</label>
+          <input type="text" id="prop-gh-repo" placeholder="openclaw">
+          <label style="margin-top:8px;">API Token <span style="color:var(--text-muted);font-weight:normal;">(optional)</span></label>
+          <input type="password" id="prop-gh-apikey" placeholder="ghp_...">
+          <small style="color:var(--text-muted);margin-top:4px;display:block;line-height:1.4;">Without a token: 60 requests/hr.<br>With a token: 5,000 requests/hr.</small>
+        </div>
+        <div class="prop-group" id="prop-openclawurl-group" style="display:none;">
+          <label>OpenClaw URL</label>
+          <input type="text" id="prop-openclawurl" placeholder="http://localhost:18789">
+          <small>Full URL to your OpenClaw gateway</small>
+        </div>
+        <div class="prop-group" id="prop-api-group" style="display:none;">
+          <label>API Key Variable</label>
+          <input type="text" id="prop-api-key" readonly style="color:#8b949e;cursor:default;">
+          <label style="margin-top:8px;">API Key</label>
+          <input type="password" id="prop-api-key-value" placeholder="Paste your API key here" style="font-size:12px;">
+          <small id="prop-api-note" style="display:none;color:#8b949e;margin-top:4px;line-height:1.4;font-style:italic;"></small>
+        </div>
+        <div class="prop-group" id="prop-endpoint-group" style="display:none;">
+          <label>API Endpoint</label>
+          <input type="text" id="prop-endpoint" placeholder="https://api.example.com">
+        </div>
+        <div class="prop-group" id="prop-directorypath-group" style="display:none;">
+          <label>Directory Path</label>
+          <div style="display:flex;gap:4px;">
+            <input type="text" id="prop-directorypath" placeholder="~/images" style="flex:1;">
+            <button type="button" id="btn-browse-dir" style="padding:4px 10px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);cursor:pointer;white-space:nowrap;" title="Browse directories">📁 Browse</button>
+          </div>
+          <div id="dir-browser" style="display:none;margin-top:8px;max-height:200px;overflow-y:auto;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;padding:8px;font-size:12px;"></div>
+        </div>
+        <div class="prop-group" id="prop-server-group" style="display:none;">
+          <label>Server</label>
+          <select id="prop-server">
+            <option value="local">Local</option>
+          </select>
+          <small style="color:#8b949e;margin-top:4px;display:block;">Select data source for this widget</small>
+        </div>
+        <div class="prop-group">
+          <label>Refresh Interval (sec)</label>
+          <input type="number" id="prop-refresh" placeholder="60" min="0">
+        </div>
+        <div class="prop-group" id="prop-widgetfontscale-group">
+          <label>Content Font Adjust</label>
+          <select id="prop-widgetfontscale">
+            <option value="0">Default (global)</option>
+            <option value="-25">−25%</option>
+            <option value="-20">−20%</option>
+            <option value="-15">−15%</option>
+            <option value="-10">−10%</option>
+            <option value="-5">−5%</option>
+            <option value="5">+5%</option>
+            <option value="10">+10%</option>
+            <option value="15">+15%</option>
+            <option value="20">+20%</option>
+            <option value="25">+25%</option>
+          </select>
+        </div>
+        <div id="prop-extra-container"></div>
+        <div class="prop-group" id="prop-description-group">
+          <div id="prop-description" style="font-size:11px;color:#8b949e;padding:8px;background:#161b22;border-radius:6px;line-height:1.4;"></div>
+        </div>
+        <hr>
+        <button class="btn btn-danger btn-sm" id="btn-delete-widget" onclick="if(state.selectedWidget) deleteWidget(state.selectedWidget.id)">🗑️ Delete Widget</button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Preview Modal -->
+  <div class="modal" id="preview-modal">
+    <div class="modal-content modal-fullscreen">
+      <div class="modal-header">
+        <h2>Preview</h2>
+        <button class="modal-close" id="close-preview">&times;</button>
+      </div>
+      <div class="modal-body">
+        <iframe id="preview-frame"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/widgets.js"></script>
+  <script src="js/jarvis-widgets.js"></script>
+  <script src="js/builder.js"></script>
+  <script>
+    // Load page links into nav
+    fetch('/api/pages').then(r => r.json()).then(pages => {
+      const nav = document.getElementById('header-nav');
+      if (!nav || !pages.length) return;
+      const sep = document.createElement('span');
+      sep.className = 'page-separator';
+      sep.style.cssText = 'width:1px;height:16px;background:#30363d;margin:0 4px';
+      nav.insertBefore(sep, nav.firstChild);
+      pages.reverse().forEach(p => {
+        const a = document.createElement('a');
+        a.href = '/pages/' + p.id;
+        a.className = 'nav-link page-link';
+        a.textContent = p.icon + ' ' + p.title;
+        nav.insertBefore(a, nav.firstChild);
+      });
+    }).catch(() => {});
+
+    // Theme Switcher System
+    (function() {
+      const THEME_KEY = 'lobsterboard-theme';
+      const themeSelect = document.getElementById('theme-select');
+
+      function getSavedTheme() {
+        const stored = localStorage.getItem(THEME_KEY);
+        if (stored) return stored;
+        try {
+          const dashConfig = localStorage.getItem('lobsterboard-dashboard');
+          if (dashConfig) {
+            const config = JSON.parse(dashConfig);
+            if (config.theme) return config.theme;
+          }
+        } catch (e) {}
+        return 'default';
+      }
+
+      function applyTheme(theme) {
+        document.body.classList.remove('theme-feminine', 'theme-feminine-dark', 'theme-terminal', 'theme-paper');
+        if (theme && theme !== 'default') {
+          document.body.classList.add('theme-' + theme);
+        }
+      }
+
+      function saveTheme(theme) {
+        localStorage.setItem(THEME_KEY, theme);
+        try {
+          const dashConfig = localStorage.getItem('lobsterboard-dashboard');
+          if (dashConfig) {
+            const config = JSON.parse(dashConfig);
+            config.theme = theme;
+            localStorage.setItem('lobsterboard-dashboard', JSON.stringify(config));
+          }
+        } catch (e) {}
+      }
+
+      const savedTheme = getSavedTheme();
+      applyTheme(savedTheme);
+      if (themeSelect) themeSelect.value = savedTheme;
+
+      if (themeSelect) {
+        themeSelect.addEventListener('change', function() {
+          const theme = this.value;
+          applyTheme(theme);
+          saveTheme(theme);
+        });
+      }
+
+      window.LobsterBoard = window.LobsterBoard || {};
+      window.LobsterBoard.theme = {
+        get: getSavedTheme,
+        set: function(theme) {
+          applyTheme(theme);
+          saveTheme(theme);
+          if (themeSelect) themeSelect.value = theme;
+        },
+        apply: applyTheme
+      };
+    })();
+  </script>
+
+  <!-- Template Gallery Modal -->
+  <div id="template-gallery-modal" class="tpl-modal-overlay" style="display:none;">
+    <div class="tpl-modal">
+      <div class="tpl-modal-header">
+        <h2>📋 Template Gallery</h2>
+        <input type="text" id="tpl-search" placeholder="Search templates..." class="tpl-search">
+        <button class="tpl-close-btn" id="tpl-close">&times;</button>
+      </div>
+      <div class="tpl-modal-body" id="tpl-grid">
+        <div class="tpl-empty">No templates yet. Export your dashboard to create the first one!</div>
+      </div>
+      <div class="tpl-detail" id="tpl-detail" style="display:none;">
+        <button class="tpl-back-btn" id="tpl-back">← Back</button>
+        <div class="tpl-detail-content">
+          <img id="tpl-detail-img" class="tpl-detail-img" src="" alt="" style="cursor:zoom-in;" title="Click to enlarge">
+          <div class="tpl-detail-info">
+            <h2 id="tpl-detail-name"></h2>
+            <p id="tpl-detail-desc"></p>
+            <div id="tpl-detail-meta"></div>
+            <div id="tpl-detail-tags"></div>
+            <div class="tpl-detail-actions">
+              <div style="position:relative;display:inline-block;">
+                <button class="btn btn-primary" id="tpl-import-replace">Replace Current Dashboard</button>
+              </div>
+              <div style="position:relative;display:inline-block;">
+                <button class="btn btn-secondary" id="tpl-import-merge">Merge Into Current</button>
+              </div>
+              <div style="position:relative;display:inline-block;">
+                <button class="btn btn-danger" id="tpl-delete" style="background:#da3633;border-color:#da3633;">🗑️ Delete Template</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screenshot Lightbox -->
+  <div id="tpl-lightbox" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.85);cursor:default;justify-content:center;align-items:center;" onclick="this.style.display='none'">
+    <div style="position:relative;display:inline-block;" onclick="event.stopPropagation()">
+      <img id="tpl-lightbox-img" style="max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+      <button onclick="document.getElementById('tpl-lightbox').style.display='none'" style="position:absolute;top:-12px;right:-12px;background:#30363d;border:2px solid #555;color:#fff;font-size:18px;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.5);" onmouseover="this.style.background='#da3633'" onmouseout="this.style.background='#30363d'">&times;</button>
+    </div>
+  </div>
+
+  <!-- Export Template Modal -->
+  <div id="template-export-modal" class="tpl-modal-overlay" style="display:none;">
+    <div class="tpl-modal tpl-modal-sm">
+      <div class="tpl-modal-header">
+        <h2>📦 Export as Template</h2>
+        <button class="tpl-close-btn" id="tpl-export-close">&times;</button>
+      </div>
+      <div class="tpl-modal-body">
+        <div class="tpl-form">
+          <label>Name *</label>
+          <input type="text" id="tpl-export-name" placeholder="My Dashboard Template" class="tpl-input">
+          <label>Description</label>
+          <textarea id="tpl-export-desc" placeholder="What this dashboard is for..." class="tpl-input" rows="3"></textarea>
+          <label>Author</label>
+          <input type="text" id="tpl-export-author" placeholder="your-name" class="tpl-input">
+          <label>Tags (comma-separated)</label>
+          <input type="text" id="tpl-export-tags" placeholder="monitoring, homelab, docker" class="tpl-input">
+          <label>Screenshot</label>
+          <input type="file" id="tpl-export-screenshot" accept="image/*" class="tpl-input" style="padding:6px;">
+          <small style="color:#8b949e;display:block;margin-top:2px;">Optional — if left empty, a screenshot is captured automatically</small>
+          <div id="tpl-widget-list" style="margin-top:12px;padding:8px;background:var(--bg-tertiary);border-radius:6px;font-size:12px;"></div>
+          <button class="btn btn-primary" id="tpl-export-submit" style="margin-top:16px;width:100%;">Export Template</button>
+          <div id="tpl-export-result" class="tpl-export-result" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIN Modal -->
+  <div id="pin-modal" class="pin-modal-overlay" style="display:none;">
+    <div class="pin-modal">
+      <h3 id="pin-modal-title">🔒 Enter PIN</h3>
+      <div id="pin-current-group" class="pin-group" style="display:none;">
+        <label>Current PIN</label>
+        <input type="password" id="pin-input-current" maxlength="6" placeholder="••••" inputmode="numeric" pattern="[0-9]*" class="pin-input">
+      </div>
+      <div class="pin-group">
+        <label>PIN (4-6 digits)</label>
+        <input type="password" id="pin-input" maxlength="6" placeholder="••••" inputmode="numeric" pattern="[0-9]*" class="pin-input">
+      </div>
+      <div id="pin-confirm-group" class="pin-group" style="display:none;">
+        <label>Confirm PIN</label>
+        <input type="password" id="pin-input-confirm" maxlength="6" placeholder="••••" inputmode="numeric" pattern="[0-9]*" class="pin-input">
+      </div>
+      <div id="pin-error" class="pin-error"></div>
+      <div class="pin-actions">
+        <button class="btn btn-primary" id="pin-submit">Submit</button>
+        <button class="btn btn-secondary" id="pin-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Security Settings Modal -->
+  <div id="security-modal" class="pin-modal-overlay" style="display:none;">
+    <div class="pin-modal" style="max-width:400px;">
+      <h3>🔒 Security Settings</h3>
+      <div class="security-option">
+        <div class="security-option-header">
+          <strong>Edit PIN</strong>
+          <span id="pin-status" class="security-badge">Not Set</span>
+        </div>
+        <p style="color:#8b949e;font-size:12px;margin:4px 0 8px;">Require a PIN to enter edit mode</p>
+        <div class="security-buttons">
+          <button class="btn btn-secondary btn-sm" id="sec-set-pin">Set PIN</button>
+          <button class="btn btn-secondary btn-sm" id="sec-change-pin" style="display:none;">Change PIN</button>
+          <button class="btn btn-danger btn-sm" id="sec-remove-pin" style="display:none;">Remove PIN</button>
+        </div>
+      </div>
+      <div class="security-option" style="margin-top:16px;">
+        <div class="security-option-header">
+          <strong>Public Mode</strong>
+          <label class="toggle-switch">
+            <input type="checkbox" id="public-mode-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <p style="color:#8b949e;font-size:12px;margin:4px 0 0;">Hide edit button and block config APIs. Ideal for publicly-exposed dashboards.</p>
+      </div>
+      <div style="margin-top:20px;text-align:right;">
+        <button class="btn btn-secondary" id="sec-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Servers Settings Modal -->
+  <div id="servers-modal" class="pin-modal-overlay" style="display:none;">
+    <div class="pin-modal" style="max-width:500px;">
+      <h3>🖥️ Remote Servers</h3>
+      <p style="color:#8b949e;font-size:12px;margin:0 0 16px;">
+        Connect to remote servers running <a href="https://www.npmjs.com/package/lobsterboard-agent" target="_blank" style="color:#58a6ff;">lobsterboard-agent</a>
+      </p>
+      <div id="servers-list" style="margin-bottom:16px;"></div>
+      <div class="server-add-form" style="background:var(--bg-tertiary);padding:12px;border-radius:6px;">
+        <h4 style="margin:0 0 12px;font-size:14px;">➕ Add Server</h4>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <input type="text" id="server-name" placeholder="Server Name (e.g., Production VPS)" class="tpl-input" style="font-size:13px;">
+          <input type="text" id="server-url" placeholder="URL (e.g., http://192.168.1.100:9090)" class="tpl-input" style="font-size:13px;">
+          <input type="password" id="server-apikey" placeholder="API Key (from lobsterboard-agent show-key)" class="tpl-input" style="font-size:13px;">
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn btn-primary btn-sm" id="server-add-btn">Add Server</button>
+            <button class="btn btn-secondary btn-sm" id="server-test-btn">Test Connection</button>
+          </div>
+          <div id="server-add-result" style="font-size:12px;margin-top:4px;"></div>
+        </div>
+      </div>
+      <div style="margin-top:16px;text-align:right;">
+        <button class="btn btn-secondary" id="servers-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/templates.js"></script>
+</body>
+</html>

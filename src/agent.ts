@@ -14,6 +14,8 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { join, dirname } from "node:path";
+import { writeFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { loadSOUL, loadMemory, loadDailyLog, appendDailyLog } from "./memory.js";
 import { TOOL_DEFINITIONS, executeTool } from "./tools/index.js";
 import type { ToolResult } from "./tools/index.js";
@@ -22,6 +24,7 @@ import { createHash } from "node:crypto";
 import { pruneMessages } from "./compaction.js";
 import { emit } from "./events.js";
 import { shellExec } from "./tools/shell.js";
+import { logEvent } from "./dashboard.js";
 
 const log = createLogger("agent");
 
@@ -30,7 +33,7 @@ const MCP_CONFIG = join(PROJECT_ROOT, "jarvis-mcp.json");
 
 const MODEL = "sonnet";
 const MAX_OUTPUT_TOKENS = 4096;
-const CLI_TIMEOUT = 300_000; // 5 minutes
+const CLI_TIMEOUT = 600_000; // 10 minutes
 const PROGRESS_THRESHOLD = 5;
 
 // API fallback config
@@ -103,8 +106,122 @@ function escapeForHeredoc(str: string): string {
 }
 
 // ══════════════════════════════════════════════
+// Multimodal → CLI helpers
+// ══════════════════════════════════════════════
+
+type ContentArray = Anthropic.MessageCreateParams["messages"][0]["content"];
+
+/**
+ * Decompose a multimodal content array into:
+ *   - text: combined text parts for the prompt (with temp file paths for images/docs)
+ *   - tempPaths: temp file paths that need cleanup after the CLI call
+ *
+ * Images and PDFs are both written to temp files and referenced in the prompt text.
+ * Claude Code's native Read tool handles both image and PDF files directly.
+ */
+function extractMultimodalParts(content: ContentArray): {
+  text: string;
+  tempPaths: string[];
+} {
+  if (typeof content === "string") return { text: content, tempPaths: [] };
+
+  const textParts: string[] = [];
+  const tempPaths: string[] = [];
+
+  for (const block of content) {
+    if (block.type === "text") {
+      textParts.push(block.text);
+    } else if (block.type === "image") {
+      const src = block.source;
+      if (src.type === "base64") {
+        const ext = src.media_type === "image/jpeg" ? "jpg"
+          : src.media_type === "image/gif" ? "gif"
+          : src.media_type === "image/webp" ? "webp"
+          : "png";
+        const tmpPath = join(tmpdir(), `jarvis-img-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
+        writeFileSync(tmpPath, Buffer.from(src.data, "base64"));
+        tempPaths.push(tmpPath);
+        textParts.push(`[Image saved to: ${tmpPath} — use the Read tool to view it]`);
+      } else if (src.type === "url") {
+        textParts.push(`[Image URL: ${src.url}]`);
+      }
+    } else if (block.type === "document") {
+      const src = (block as { type: "document"; source: { type: string; data?: string; media_type?: string; url?: string } }).source;
+      if (src.type === "base64" && src.data) {
+        const ext = src.media_type === "application/pdf" ? "pdf" : "bin";
+        const tmpPath = join(tmpdir(), `jarvis-doc-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
+        writeFileSync(tmpPath, Buffer.from(src.data, "base64"));
+        tempPaths.push(tmpPath);
+        textParts.push(`[Document saved to: ${tmpPath} — use the Read tool to open it]`);
+      } else if (src.type === "url" && src.url) {
+        textParts.push(`[Document URL: ${src.url} — use WebFetch or Read tool to open it]`);
+      }
+    }
+  }
+
+  return { text: textParts.join("\n"), tempPaths };
+}
+
+// ══════════════════════════════════════════════
 // Primary path: Claude Code CLI (FREE on Max plan)
 // ══════════════════════════════════════════════
+
+/**
+ * Parse stream-json output from `claude -p --output-format stream-json --verbose`.
+ * Extracts tool calls for dashboard/CLI visibility and the final result text.
+ */
+function parseStreamJson(raw: string): { result: string; toolCalls: Array<{ name: string; input: unknown; id: string }>; toolResults: Map<string, string> } {
+  const toolCalls: Array<{ name: string; input: unknown; id: string }> = [];
+  const toolResults = new Map<string, string>();
+  let result = "";
+
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+
+    // Tool calls appear as tool_use blocks in assistant messages
+    if (event["type"] === "assistant") {
+      const msg = event["message"] as { content?: Array<{ type: string; name?: string; input?: unknown; id?: string }> } | undefined;
+      for (const block of msg?.content ?? []) {
+        if (block.type === "tool_use" && block.name) {
+          toolCalls.push({ name: block.name, input: block.input ?? {}, id: block.id ?? "" });
+        }
+      }
+    }
+
+    // Tool results appear in user messages with tool_result content blocks
+    if (event["type"] === "user") {
+      const msg = event["message"] as { content?: Array<{ type: string; tool_use_id?: string; content?: unknown }> } | undefined;
+      for (const block of msg?.content ?? []) {
+        if (block.type === "tool_result" && block.tool_use_id) {
+          let text = "";
+          if (typeof block.content === "string") {
+            text = block.content;
+          } else if (Array.isArray(block.content)) {
+            text = (block.content as Array<{ type: string; text?: string }>)
+              .filter((c) => c.type === "text" && c.text)
+              .map((c) => c.text as string)
+              .join("\n");
+          }
+          toolResults.set(block.tool_use_id, text);
+        }
+      }
+    }
+
+    // Final result
+    if (event["type"] === "result" && event["subtype"] === "success") {
+      result = (event["result"] as string) ?? "";
+    }
+  }
+
+  return { result, toolCalls, toolResults };
+}
 
 async function runViaCLI(
   userMessage: string,
@@ -123,6 +240,8 @@ async function runViaCLI(
     "--dangerously-skip-permissions",
     "--mcp-config", MCP_CONFIG,
     "--no-session-persistence",
+    "--output-format", "stream-json",
+    "--verbose",
     `<<'JARVIS_EOF'\n${fullPrompt}\nJARVIS_EOF`,
   ].join(" ");
 
@@ -132,19 +251,38 @@ async function runViaCLI(
   const cliEnv = { ...process.env } as Record<string, string | undefined>;
   delete cliEnv["ANTHROPIC_API_KEY"];
 
-  const result = await shellExec(command, PROJECT_ROOT, CLI_TIMEOUT, cliEnv);
+  const raw = await shellExec(command, PROJECT_ROOT, CLI_TIMEOUT, cliEnv);
 
-  if (result.startsWith("ERROR")) {
-    throw new Error(`CLI failed: ${result.slice(0, 300)}`);
+  if (raw.startsWith("ERROR")) {
+    throw new Error(`CLI failed: ${raw.slice(0, 300)}`);
   }
 
-  log.info(`CLI response: ${result.length} chars`);
-  await appendDailyLog(
-    `[${new Date().toISOString()}] Agent response (CLI): ${result.slice(0, 100)}...`,
-  );
-  await emit("agent", "response", { backend: "cli" });
+  const { result, toolCalls, toolResults } = parseStreamJson(raw);
 
-  return result;
+  // Log each tool call to dashboard + CLI
+  for (const tc of toolCalls) {
+    const resultText = toolResults.get(tc.id) ?? null;
+    log.info(`Tool call: ${tc.name}`);
+    logEvent({
+      type: "tool_call",
+      tool: tc.name,
+      summary: `Tool: ${tc.name}`,
+      detail: {
+        input: tc.input,
+        ...(resultText ? { result: resultText.slice(0, 500) } : {}),
+      },
+      status: "ok",
+    });
+  }
+
+  const text = result || raw; // fallback to raw if parse found nothing
+  log.info(`CLI response: ${text.length} chars, ${toolCalls.length} tool calls`);
+  await appendDailyLog(
+    `[${new Date().toISOString()}] Agent response (CLI): ${text.slice(0, 100)}...`,
+  );
+  await emit("agent", "response", { backend: "cli", toolCalls: toolCalls.length });
+
+  return text;
 }
 
 // ══════════════════════════════════════════════
@@ -294,6 +432,13 @@ async function runViaAPI(
           await onProgress(`Using ${toolLabel}...`).catch(() => {});
         }
         const result = await executeTool(tool.name, tool.input as Record<string, unknown>);
+        logEvent({
+          type: "tool_call",
+          tool: tool.name,
+          summary: `Tool: ${tool.name}`,
+          detail: { input: tool.input, ok: !result.text.startsWith("ERROR") },
+          status: result.text.startsWith("ERROR") ? "error" : "ok",
+        });
         results.push({
           type: "tool_result",
           tool_use_id: tool.id,
@@ -322,20 +467,25 @@ export async function runAgent(
   conversationHistory: MessageParam[],
   onProgress?: ProgressCallback,
 ): Promise<string> {
-  // Multimodal content (images) must go through API — CLI is text-only
+  let textMessage: string;
+  let tempPaths: string[] = [];
+
   if (typeof userMessage !== "string") {
-    log.info("Multimodal input — using API fallback");
-    return runViaAPI(userMessage, conversationHistory, onProgress);
+    // Decompose multimodal content — images and docs saved to temp files, paths injected into prompt
+    const parts = extractMultimodalParts(userMessage);
+    textMessage = parts.text;
+    tempPaths = parts.tempPaths;
+    log.info(`Multimodal input: ${tempPaths.length} file(s) — using CLI with Read tool`);
+  } else {
+    textMessage = userMessage;
   }
 
-  // Try CLI first (free)
+  // CLI only — no API fallback (Max plan is free, API costs money)
   try {
-    return await runViaCLI(userMessage, conversationHistory);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    log.warn(`CLI failed, falling back to API: ${msg.slice(0, 100)}`);
-
-    // Fall back to API
-    return runViaAPI(userMessage, conversationHistory, onProgress);
+    return await runViaCLI(textMessage, conversationHistory);
+  } finally {
+    for (const p of tempPaths) {
+      try { unlinkSync(p); } catch { /* ignore */ }
+    }
   }
 }

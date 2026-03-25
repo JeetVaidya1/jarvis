@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-dashboard/
 .env
 memory/*.md
 !memory/.gitkeep
@@ -8,3 +9,5 @@ logs/
 sessions/
 .claude/
 memory/vectors.db
+0.05
+dashboard/jarvis-dashboard.db*

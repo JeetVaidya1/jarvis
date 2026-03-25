@@ -97,6 +97,24 @@ Scheduled programs (cron via node-cron)
 - Free on Max plan — preferred over inline code edits for anything non-trivial
 - Full file system and web access within the subprocess
 
+### Web Dashboard
+
+A real-time command center UI at `http://localhost:4242`.
+
+- **Live event feed** — every tool call, message, trade, and error streams in via SSE
+- **Sub-agent tracker** — running/completed background jobs with output
+- **System stats** — CPU, memory, disk, network (live SSE updates via `systeminformation`)
+- **Portfolio widget** — Polymarket positions and P&L at a glance
+- **iMessage feed** — recent chats surfaced in the dashboard
+- **Neural activity** — visual representation of recent tool calls
+- **Drag-and-drop layout** — widgets are resizable/repositionable; layout persists in `dashboard-layout.json`
+- **Decoupled architecture** — Express server independent of agent; agent POSTs events over HTTP (fire-and-forget)
+
+```bash
+npm run dev:full   # agent + dashboard together
+npm run dashboard  # dashboard only
+```
+
 ### Sub-Agents
 - Spawn background tasks that don't block the main conversation
 - Check status, retrieve results, cancel running jobs
@@ -153,7 +171,11 @@ jarvis/
 │   │   ├── system-monitor.ts # macOS system monitor — CPU, memory, disk, processes, network
 │   │   ├── imcp.ts           # iMCP — iMessage, Contacts, Reminders, Weather
 │   │   ├── research.ts       # Brave Search, Firecrawl, Perplexity
+│   │   ├── google.ts         # Google Calendar + Gmail tools
+│   │   ├── mac-computer.ts   # macOS automation (clicks, typing, screenshots)
 │   │   └── memory-tool.ts    # memory_update tool
+│   ├── dashboard.ts          # Dashboard event emitter (HTTP shim)
+│   ├── dashboard-hooks.ts    # Wires agent/trade events → dashboard
 │   └── trading/
 │       ├── index.ts      # Trading engine entry point
 │       ├── engine.ts     # Main trading loop + lifecycle
@@ -168,6 +190,13 @@ jarvis/
 │   ├── HEARTBEAT.md      # Heartbeat program config
 │   ├── programs/         # Scheduled autonomous tasks (cron + prompt)
 │   └── skills/           # Reusable skill prompts (GitHub, Polymarket, etc.)
+├── dashboard/            # Web dashboard (Express server + UI)
+│   ├── index.ts          # Dashboard entry point
+│   ├── server.ts         # Express server — REST + SSE endpoints
+│   ├── db.ts             # SQLite event store
+│   ├── logger.ts         # SSE broadcaster
+│   └── public/           # Static UI assets
+├── dashboard-layout.json # Persisted widget layout
 ├── memory/               # Persistent memory files (gitignored except .gitkeep)
 ├── logs/                 # Daily log files (gitignored)
 ├── sessions/             # Session state files (gitignored)
@@ -254,6 +283,9 @@ JARVIS_WEBHOOK_PORT=7777
 ```bash
 # Development (hot reload)
 npm run dev
+
+# Development with dashboard
+npm run dev:full
 
 # Production
 npm run build && npm start
@@ -357,6 +389,7 @@ node dist/mcp-server.js
 | Crypto | ethers.js v6 |
 | Embeddings | @huggingface/transformers (ONNX, in-process) |
 | Vector DB | sqlite-vec + better-sqlite3 |
+| Dashboard | Express + SSE + systeminformation |
 
 ---
 

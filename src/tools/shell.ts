@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { exec, spawn } from "node:child_process";
 
 const BLOCKED_PATTERNS = [
   // Recursive deletion
@@ -46,6 +46,64 @@ function isCommandBlocked(command: string): boolean {
 
 const DEFAULT_TIMEOUT = 120_000;
 
+export async function shellExecStream(
+  command: string,
+  onChunk: (chunk: string) => void,
+  workingDir?: string,
+  timeout: number = DEFAULT_TIMEOUT,
+  env?: Record<string, string | undefined>,
+): Promise<string> {
+  if (isCommandBlocked(command)) {
+    return `BLOCKED: This command matches a safety blocklist and was not executed. Command: ${command}`;
+  }
+
+  const cwd = workingDir ?? process.env["HOME"] ?? "/";
+
+  return new Promise((resolve) => {
+    const proc = spawn("/bin/zsh", ["-c", command], {
+      cwd,
+      env: env ?? process.env as Record<string, string | undefined>,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let output = "";
+    let stderrOutput = "";
+    let timedOut = false;
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      proc.kill("SIGTERM");
+    }, timeout);
+
+    proc.stdout.on("data", (chunk: Buffer) => {
+      const text = chunk.toString();
+      output += text;
+      onChunk(text);
+    });
+
+    proc.stderr.on("data", (chunk: Buffer) => {
+      stderrOutput += chunk.toString();
+    });
+
+    proc.on("close", (code: number | null) => {
+      clearTimeout(timer);
+      const combined = [output, stderrOutput].filter(Boolean).join("\n");
+      if (timedOut) {
+        resolve(`ERROR (exit timeout):\n${combined}`);
+      } else if (code !== 0 && code !== null) {
+        resolve(`ERROR (exit ${code}):\n${combined}`);
+      } else {
+        resolve(output || "(no output)");
+      }
+    });
+
+    proc.on("error", (err: Error) => {
+      clearTimeout(timer);
+      resolve(`ERROR (exit unknown):\n${err.message}`);
+    });
+  });
+}
+
 export async function shellExec(
   command: string,
   workingDir?: string,
@@ -64,7 +122,7 @@ export async function shellExec(
       {
         cwd,
         timeout,
-        maxBuffer: 1024 * 1024,
+        maxBuffer: 50 * 1024 * 1024,
         shell: "/bin/zsh",
         ...(env ? { env } : {}),
       },

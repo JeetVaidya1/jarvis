@@ -9,7 +9,7 @@
  *  3. claude_code_review — code review with structured output
  */
 
-import { shellExec } from "./shell.js";
+import { shellExec, shellExecStream } from "./shell.js";
 import { createLogger } from "../logger.js";
 
 const log = createLogger("claude-code");
@@ -31,6 +31,7 @@ interface ClaudeCodeOptions {
   maxBudget?: number;      // max $ to spend (safety cap)
   outputFormat?: "text" | "json";
   effort?: "low" | "medium" | "high" | "max";
+  onChunk?: (chunk: string) => void;
 }
 
 /**
@@ -50,6 +51,7 @@ export async function claudeCode(
     maxBudget,
     outputFormat = "text",
     effort,
+    onChunk,
   } = options;
 
   const cappedTimeout = Math.min(timeout, MAX_TIMEOUT);
@@ -74,6 +76,16 @@ export async function claudeCode(
   const command = `${parts.join(" ")} <<'JARVIS_PROMPT_EOF'\n${prompt}\nJARVIS_PROMPT_EOF`;
 
   log.info(`Claude Code task: ${prompt.slice(0, 80)}... (model: ${model ?? "default"}, timeout: ${cappedTimeout}ms)`);
+
+  if (onChunk) {
+    const result = await shellExecStream(command, onChunk, workingDir, cappedTimeout, undefined);
+    if (result.startsWith("ERROR")) {
+      log.error(`Claude Code failed: ${result.slice(0, 200)}`);
+    } else {
+      log.info(`Claude Code completed: ${result.length} chars`);
+    }
+    return result;
+  }
 
   const result = await shellExec(command, workingDir, cappedTimeout);
 

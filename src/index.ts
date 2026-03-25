@@ -7,12 +7,17 @@ import { createLogger, rotateLogs } from "./logger.js";
 import { startWebhookServer, stopWebhookServer } from "./webhook.js";
 import { startPrograms, stopPrograms } from "./programs.js";
 import { sweepSubAgents } from "./subagent.js";
+import { logEvent } from "./dashboard.js";
+import { registerDashboardHooks } from "./dashboard-hooks.js";
 
 const log = createLogger("main");
 
 async function main(): Promise<void> {
   // Rotate old logs
   await rotateLogs();
+
+  // Wire internal events → dashboard activity feed
+  registerDashboardHooks();
 
   // Validate all config (required + optional)
   const config = validateConfig();
@@ -50,6 +55,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 
   log.info("Jarvis is online");
+  logEvent({ type: "message", summary: "Jarvis is online", status: "ok" });
   await bot.start();
 }
 

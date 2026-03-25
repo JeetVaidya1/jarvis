@@ -3,6 +3,7 @@ import type { Bot } from "grammy";
 import { runAgent } from "./agent.js";
 import { loadHEARTBEAT, appendDailyLog } from "./memory.js";
 import { createLogger } from "./logger.js";
+import { logEvent } from "./dashboard.js";
 
 const log = createLogger("heartbeat");
 
@@ -53,6 +54,7 @@ export function startHeartbeat(bot: Bot): void {
         await appendDailyLog(
           `[${new Date().toISOString()}] Heartbeat: OK`,
         );
+        logEvent({ type: "heartbeat", summary: "Heartbeat: OK", status: "ok" });
         return;
       }
 
@@ -61,6 +63,7 @@ export function startHeartbeat(bot: Bot): void {
       await appendDailyLog(
         `[${new Date().toISOString()}] Heartbeat alert: ${response.slice(0, 200)}`,
       );
+      logEvent({ type: "heartbeat", summary: `Heartbeat alert: ${response.slice(0, 100)}`, status: "ok" });
 
       await bot.api.sendMessage(chatId, response).catch((err) => {
         log.error(`Failed to send heartbeat message: ${err}`);
@@ -71,6 +74,7 @@ export function startHeartbeat(bot: Bot): void {
       await appendDailyLog(
         `[${new Date().toISOString()}] Heartbeat ERROR: ${msg}`,
       );
+      logEvent({ type: "error", summary: `Heartbeat error: ${msg.slice(0, 100)}`, status: "error" });
     } finally {
       heartbeatRunning = false;
     }

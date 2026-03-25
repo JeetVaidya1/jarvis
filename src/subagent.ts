@@ -13,6 +13,7 @@ import { runAgent } from "./agent.js";
 import { claudeCode, claudeCodeResearch } from "./tools/claude-code.js";
 import { createLogger } from "./logger.js";
 import { emit } from "./events.js";
+import { logEvent, upsertSubagent as dashboardUpsertSubagent, logSubagentOutput } from "./dashboard.js";
 
 const log = createLogger("subagent");
 
@@ -60,6 +61,16 @@ export function spawnSubAgent(
 
   log.info(`Spawned sub-agent ${id} (${backend}): ${run.label}`);
 
+  // Notify dashboard
+  dashboardUpsertSubagent({
+    id,
+    name: run.label,
+    status: "running",
+    startedAt: new Date(run.createdAt).toISOString(),
+    task,
+  });
+  logEvent({ type: "subagent", summary: `Spawned: ${run.label}`, detail: { id, backend }, status: "pending" });
+
   // Fire and forget — runs in background
   executeSubAgent(id, task, backend, controller.signal, workingDir, model).catch((err) => {
     log.error(`Sub-agent ${id} crashed: ${err}`);
@@ -94,6 +105,9 @@ async function executeSubAgent(
         workingDir,
         model,
         timeout: 300_000,
+        onChunk: (chunk: string) => {
+          logSubagentOutput(id, chunk);
+        },
       });
     } else {
       // Route through Anthropic API — costs money but has Jarvis's tools
@@ -112,6 +126,18 @@ async function executeSubAgent(
 
     log.info(`Sub-agent ${id} completed (${((run.completedAt - run.createdAt) / 1000).toFixed(1)}s)`);
 
+    // Notify dashboard
+    dashboardUpsertSubagent({
+      id,
+      name: run.label,
+      status: "completed",
+      startedAt: new Date(run.createdAt).toISOString(),
+      completedAt: new Date(run.completedAt).toISOString(),
+      task: run.task,
+      result: result.slice(0, 500),
+    });
+    logEvent({ type: "subagent", summary: `Completed: ${run.label}`, detail: { id }, status: "ok" });
+
     await emit("subagent", "completed", {
       id,
       label: run.label,
@@ -124,6 +150,17 @@ async function executeSubAgent(
     run.error = msg;
     run.completedAt = Date.now();
     log.error(`Sub-agent ${id} failed: ${msg}`);
+
+    // Notify dashboard
+    dashboardUpsertSubagent({
+      id,
+      name: run.label,
+      status: "failed",
+      startedAt: new Date(run.createdAt).toISOString(),
+      completedAt: new Date(run.completedAt).toISOString(),
+      task: run.task,
+    });
+    logEvent({ type: "subagent", summary: `Failed: ${run.label}`, detail: { id, error: msg }, status: "error" });
 
     await emit("subagent", "failed", { id, label: run.label, error: msg });
   } finally {
