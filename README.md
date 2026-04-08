@@ -119,10 +119,13 @@ Scheduled programs (cron via node-cron)
 - **Calendar** — view today's events, upcoming schedule
 - **Gmail** — inbox triage, search, read emails
 
-### Web Dashboard
+### Web Dashboard (Full Control Surface)
 
-A real-time command center UI at `http://localhost:4242`.
+A real-time command center UI at `http://localhost:4242` — not just display, but full control.
 
+- **WebChat** — chat with Jarvis directly from the browser with streaming responses
+- **Agent Control** — cancel running agents, view status, see recent tool calls in real-time
+- **Config Editor** — edit SOUL.md, Memory, and Programs directly from the dashboard
 - **Live Agent** — streaming view of the agent response as tokens arrive, with active tool indicators
 - **Activity Feed** — every tool call, message, trade, and error streams in via SSE
 - **Sub-agent tracker** — running/completed background jobs with live output
@@ -131,7 +134,7 @@ A real-time command center UI at `http://localhost:4242`.
 - **iMessage feed** — recent chats surfaced in the dashboard
 - **Neural activity** — visual representation of recent tool calls
 - **Drag-and-drop layout** — widgets are resizable/repositionable; layout persists in `dashboard-layout.json`
-- **Decoupled architecture** — Express server independent of agent; streaming events flow via HTTP POST → SSE broadcast
+- **HTTP API** — gateway REST API on port 18790 for chat, cancel, config, and status
 
 ```bash
 npm run dev:full   # agent + dashboard together
@@ -144,6 +147,40 @@ npm run dashboard  # dashboard only
 - Cancellable via AbortController — no orphaned processes
 - Progress streamed to dashboard in real-time
 - Check status, retrieve results, cancel running jobs
+
+### Dynamic Skill Loading
+- Install new tools at runtime from `~/.jarvis/skills/` — no restart needed
+- Each skill is a directory with `index.js` exporting `tools` array + `execute` function
+- `skill_install` — create skills from inline code
+- `skill_list` — view loaded skills and their tools
+- `skill_reload` — hot-reload all skills
+- Skills are automatically merged into the tool set available to the agent
+
+### Outcome Learning
+- Log significant decisions with `outcome_log` (trading, recommendations, forecasts)
+- Resolve outcomes later with `outcome_resolve` (score 0.0–1.0)
+- Find similar past decisions with `outcome_similar` before making new ones
+- Track pending outcomes with `outcome_pending`
+- Weekly review program calculates accuracy by domain and identifies biases
+
+### Social Media Autopilot
+- Draft posts for X (Twitter) with `social_draft` — human-in-the-loop approval
+- Queue management: `/post`, `/post drafts`, `/post approve <id>`, `/post reject <id>`
+- Daily content program (opt-in) generates posts from recent insights
+- Posts go through: draft → approved → posted (or rejected)
+
+### Self-Improvement Loop
+- Weekly cron job analyzes 7 days of logs for patterns
+- Identifies: tool failures, slow operations, user corrections, unused capabilities
+- Auto-applies low-risk improvements to memory
+- Creates GitHub issues for high-risk proposals
+- Generates a structured improvement report
+
+### Daemon Management
+- **launchd integration** — auto-start on boot, restart on crash
+- `scripts/install-daemon.sh` — one-command daemon setup
+- `scripts/uninstall-daemon.sh` — clean removal
+- Loads `.env` into launchd environment automatically
 
 ### Scheduled Programs
 - Markdown files in `agent/programs/` define autonomous cron tasks
@@ -205,6 +242,14 @@ jarvis/
 │   │   ├── sentiment.ts  # Local ML sentiment (DistilBERT SST-2, ~30ms)
 │   │   ├── executor.ts   # Order placement + dry-run logic
 │   │   └── risk.ts       # Position limits, capital constraints
+│   ├── skills/
+│   │   ├── loader.ts     # Dynamic skill loader (~/.jarvis/skills/)
+│   │   └── index.ts      # Barrel exports
+│   ├── social/
+│   │   ├── queue.ts      # Post queue (draft → approved → posted)
+│   │   ├── poster.ts     # Post publisher
+│   │   └── index.ts      # Barrel exports
+│   ├── outcomes.ts       # Outcome learning (log decisions, track results)
 │   ├── heartbeat.ts      # 30-min system health checks
 │   ├── links.ts          # URL auto-expansion in messages
 │   ├── logger.ts         # Structured logging to daily log files
@@ -340,6 +385,9 @@ npm run build && npm start
 | `/trade start` | Start autonomous trading engine |
 | `/trade stop` | Stop trading engine |
 | `/trade status` | Trading status and history |
+| `/post` | View social media post queue |
+| `/post approve <id>` | Approve a draft post for publishing |
+| `/post reject <id>` | Reject a draft post |
 | `/help` | Show available commands |
 
 ---

@@ -918,3 +918,262 @@ WIDGETS['jarvis-live'] = {
     })();
   `,
 };
+
+// ─────────────────────────────────────────────
+// jarvis-webchat — WebChat
+// ─────────────────────────────────────────────
+WIDGETS['jarvis-webchat'] = {
+  name: 'WebChat',
+  icon: '🗨️',
+  category: 'large',
+  description: 'Chat with Jarvis directly from the dashboard. Streaming responses, tool call indicators, full conversation history.',
+  defaultWidth: 420,
+  defaultHeight: 500,
+  hasApiKey: false,
+  properties: { title: 'WebChat' },
+  preview: '<div style="padding:8px;font-size:11px;"><div style="background:#0a84ff;color:#fff;border-radius:12px;padding:5px 10px;margin-bottom:4px;text-align:right;">What\'s BTC at?</div><div style="background:#2d2d2d;color:#e6edf3;border-radius:12px;padding:5px 10px;">Bitcoin is at $97,432...</div></div>',
+  generateHtml: (props) => `
+    <div class="dash-card" id="widget-${props.id}" style="height:100%;display:flex;flex-direction:column;">
+      <div class="dash-card-head">
+        <span class="dash-card-title">🗨️ ${props.title || 'WebChat'}</span>
+        <span id="${props.id}-status" style="margin-left:auto;font-size:10px;color:#8b949e;">IDLE</span>
+      </div>
+      <div id="${props.id}-messages" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;"></div>
+      <div style="padding:8px;border-top:1px solid #21262d;display:flex;gap:6px;">
+        <input id="${props.id}-input" type="text" placeholder="Message Jarvis..." style="flex:1;background:#161b22;border:1px solid #30363d;color:#e6edf3;border-radius:8px;padding:8px 12px;font-size:13px;outline:none;" />
+        <button id="${props.id}-send" style="background:#238636;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;font-weight:600;">Send</button>
+      </div>
+    </div>`,
+  generateJs: (props) => `
+    (function() {
+      const msgsEl = document.getElementById('${props.id}-messages');
+      const inputEl = document.getElementById('${props.id}-input');
+      const sendBtn = document.getElementById('${props.id}-send');
+      const statusEl = document.getElementById('${props.id}-status');
+      const esc = window._esc || (s => String(s || ''));
+      let streamingBubble = null;
+      let streamBuffer = '';
+      let isStreaming = false;
+
+      function addMessage(role, text) {
+        const div = document.createElement('div');
+        div.style.cssText = role === 'user'
+          ? 'align-self:flex-end;background:#0a84ff;color:#fff;border-radius:14px 14px 4px 14px;padding:8px 12px;max-width:80%;word-break:break-word;font-size:13px;'
+          : 'align-self:flex-start;background:#2d2d2d;color:#e6edf3;border-radius:14px 14px 14px 4px;padding:8px 12px;max-width:85%;word-break:break-word;font-size:13px;white-space:pre-wrap;';
+        div.textContent = text;
+        if (msgsEl) msgsEl.appendChild(div);
+        if (msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
+        return div;
+      }
+
+      function startStream() {
+        streamBuffer = '';
+        streamingBubble = document.createElement('div');
+        streamingBubble.style.cssText = 'align-self:flex-start;background:#2d2d2d;color:#e6edf3;border-radius:14px 14px 14px 4px;padding:8px 12px;max-width:85%;word-break:break-word;font-size:13px;white-space:pre-wrap;';
+        streamingBubble.textContent = '...';
+        if (msgsEl) msgsEl.appendChild(streamingBubble);
+        isStreaming = true;
+        if (statusEl) { statusEl.textContent = '● STREAMING'; statusEl.style.color = '#3fb950'; }
+      }
+
+      async function sendMessage() {
+        const text = inputEl ? inputEl.value.trim() : '';
+        if (!text || isStreaming) return;
+        inputEl.value = '';
+        addMessage('user', text);
+        startStream();
+
+        try {
+          await fetch('http://localhost:18790/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+          });
+        } catch (err) {
+          if (streamingBubble) streamingBubble.textContent = 'Error: ' + err.message;
+          isStreaming = false;
+          if (statusEl) { statusEl.textContent = 'ERROR'; statusEl.style.color = '#f85149'; }
+        }
+      }
+
+      if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+      if (inputEl) inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+
+      window.onJarvisStream && window.onJarvisStream(function(payload) {
+        if (payload.kind === 'agent_token' && isStreaming && streamingBubble) {
+          streamBuffer += payload.text;
+          streamingBubble.textContent = streamBuffer;
+          if (msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
+        }
+        if (payload.kind === 'agent_status' && payload.status === 'tool_call' && isStreaming) {
+          if (statusEl) { statusEl.textContent = '● ' + (payload.toolName || '').replace(/_/g, ' '); statusEl.style.color = '#58a6ff'; }
+        }
+        if (payload.kind === 'agent_status' && payload.status === 'tool_done' && isStreaming) {
+          if (statusEl) { statusEl.textContent = '● STREAMING'; statusEl.style.color = '#3fb950'; }
+        }
+        if (payload.kind === 'agent_complete') {
+          if (isStreaming && streamingBubble && payload.text) {
+            streamingBubble.textContent = payload.text;
+          }
+          streamingBubble = null;
+          streamBuffer = '';
+          isStreaming = false;
+          if (statusEl) { statusEl.textContent = 'IDLE'; statusEl.style.color = '#8b949e'; }
+          if (msgsEl) msgsEl.scrollTop = msgsEl.scrollHeight;
+        }
+      });
+    })();
+  `,
+};
+
+// ─────────────────────────────────────────────
+// jarvis-control — Agent Control Panel
+// ─────────────────────────────────────────────
+WIDGETS['jarvis-control'] = {
+  name: 'Agent Control',
+  icon: '🎛️',
+  category: 'medium',
+  description: 'Control the agent: cancel runs, view status, see recent tool calls.',
+  defaultWidth: 320,
+  defaultHeight: 300,
+  hasApiKey: false,
+  properties: { title: 'Agent Control' },
+  preview: '<div style="padding:8px;font-size:11px;"><div style="color:#3fb950;">● IDLE</div><div style="margin-top:4px;"><button style="background:#da3633;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:10px;">Cancel</button></div></div>',
+  generateHtml: (props) => `
+    <div class="dash-card" id="widget-${props.id}" style="height:100%;display:flex;flex-direction:column;">
+      <div class="dash-card-head">
+        <span class="dash-card-title">🎛️ ${props.title || 'Agent Control'}</span>
+      </div>
+      <div style="padding:12px;display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:12px;color:#8b949e;">Status:</span>
+          <span id="${props.id}-status" style="font-size:14px;font-weight:600;color:#3fb950;">IDLE</span>
+        </div>
+        <button id="${props.id}-cancel" style="background:#da3633;color:#fff;border:none;border-radius:6px;padding:8px;font-size:13px;cursor:pointer;font-weight:600;opacity:0.5;" disabled>Cancel Agent</button>
+        <div style="font-size:11px;color:#8b949e;margin-top:4px;">Recent Tools:</div>
+        <div id="${props.id}-tools" style="font-size:11px;color:#e6edf3;max-height:120px;overflow-y:auto;"></div>
+      </div>
+    </div>`,
+  generateJs: (props) => `
+    (function() {
+      const statusEl = document.getElementById('${props.id}-status');
+      const cancelBtn = document.getElementById('${props.id}-cancel');
+      const toolsEl = document.getElementById('${props.id}-tools');
+      let recentTools = [];
+      let agentRunning = false;
+
+      function updateUI() {
+        if (statusEl) {
+          statusEl.textContent = agentRunning ? 'RUNNING' : 'IDLE';
+          statusEl.style.color = agentRunning ? '#3fb950' : '#8b949e';
+        }
+        if (cancelBtn) {
+          cancelBtn.disabled = !agentRunning;
+          cancelBtn.style.opacity = agentRunning ? '1' : '0.5';
+        }
+        if (toolsEl) {
+          toolsEl.innerHTML = recentTools.length === 0 ? '<span style="color:#6e7681;">None</span>' :
+            recentTools.map(t => '<div style="padding:2px 0;border-bottom:1px solid #21262d;"><span style="color:#58a6ff;">' + (window._esc ? window._esc(t.name) : t.name) + '</span> <span style="color:#6e7681;font-size:10px;">' + t.time + '</span></div>').join('');
+        }
+      }
+
+      if (cancelBtn) cancelBtn.addEventListener('click', async () => {
+        try {
+          await fetch('http://localhost:18790/api/agent/cancel', { method: 'POST' });
+          agentRunning = false;
+          updateUI();
+        } catch {}
+      });
+
+      window.onJarvisStream && window.onJarvisStream(function(payload) {
+        if (payload.kind === 'agent_token' && !agentRunning) {
+          agentRunning = true;
+          updateUI();
+        }
+        if (payload.kind === 'agent_status' && payload.status === 'tool_call') {
+          agentRunning = true;
+          recentTools.unshift({ name: (payload.toolName || '').replace(/_/g, ' '), time: new Date().toLocaleTimeString('en-CA', { hour12: false }) });
+          if (recentTools.length > 8) recentTools.pop();
+          updateUI();
+        }
+        if (payload.kind === 'agent_complete') {
+          agentRunning = false;
+          updateUI();
+        }
+      });
+
+      updateUI();
+    })();
+  `,
+};
+
+// ─────────────────────────────────────────────
+// jarvis-config — Config Editor
+// ─────────────────────────────────────────────
+WIDGETS['jarvis-config'] = {
+  name: 'Config Editor',
+  icon: '⚙️',
+  category: 'large',
+  description: 'Edit SOUL.md, Memory, and Programs directly from the dashboard.',
+  defaultWidth: 500,
+  defaultHeight: 450,
+  hasApiKey: false,
+  properties: { title: 'Config Editor' },
+  preview: '<div style="padding:8px;font-size:11px;"><div style="display:flex;gap:4px;margin-bottom:4px;"><span style="background:#238636;color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;">SOUL</span><span style="background:#21262d;color:#8b949e;padding:2px 6px;border-radius:3px;font-size:10px;">MEMORY</span></div><div style="background:#161b22;color:#8b949e;border-radius:4px;padding:4px;font-family:monospace;font-size:9px;">You are Jarvis...</div></div>',
+  generateHtml: (props) => `
+    <div class="dash-card" id="widget-${props.id}" style="height:100%;display:flex;flex-direction:column;">
+      <div class="dash-card-head">
+        <span class="dash-card-title">⚙️ ${props.title || 'Config Editor'}</span>
+        <button id="${props.id}-save" style="margin-left:auto;background:#238636;color:#fff;border:none;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;">Save</button>
+      </div>
+      <div style="display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid #21262d;">
+        <button class="${props.id}-tab" data-tab="soul" style="background:#238636;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">SOUL</button>
+        <button class="${props.id}-tab" data-tab="memory" style="background:#21262d;color:#8b949e;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">MEMORY</button>
+        <button class="${props.id}-tab" data-tab="programs" style="background:#21262d;color:#8b949e;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">PROGRAMS</button>
+      </div>
+      <textarea id="${props.id}-editor" style="flex:1;background:#0d1117;color:#e6edf3;border:none;padding:10px;font-family:'SF Mono',Monaco,monospace;font-size:12px;line-height:1.5;resize:none;outline:none;" spellcheck="false"></textarea>
+      <div id="${props.id}-toast" style="display:none;padding:4px 10px;font-size:11px;color:#3fb950;background:#1a3a2a;text-align:center;">Saved</div>
+    </div>`,
+  generateJs: (props) => `
+    (function() {
+      const editor = document.getElementById('${props.id}-editor');
+      const saveBtn = document.getElementById('${props.id}-save');
+      const toast = document.getElementById('${props.id}-toast');
+      const tabs = document.querySelectorAll('.${props.id}-tab');
+      let currentTab = 'soul';
+      const API = 'http://localhost:18790';
+
+      async function loadTab(tab) {
+        currentTab = tab;
+        tabs.forEach(t => {
+          t.style.background = t.dataset.tab === tab ? '#238636' : '#21262d';
+          t.style.color = t.dataset.tab === tab ? '#fff' : '#8b949e';
+        });
+        try {
+          const resp = await fetch(API + '/api/config/' + tab);
+          const data = await resp.json();
+          if (editor) editor.value = data.content || '';
+        } catch (err) {
+          if (editor) editor.value = 'Error loading: ' + err.message;
+        }
+      }
+
+      tabs.forEach(t => t.addEventListener('click', () => loadTab(t.dataset.tab)));
+
+      if (saveBtn) saveBtn.addEventListener('click', async () => {
+        try {
+          await fetch(API + '/api/config/' + currentTab, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: editor ? editor.value : '' }),
+          });
+          if (toast) { toast.style.display = 'block'; setTimeout(() => { toast.style.display = 'none'; }, 2000); }
+        } catch (err) {
+          alert('Save failed: ' + err.message);
+        }
+      });
+
+      loadTab('soul');
+    })();
+  `,
+};

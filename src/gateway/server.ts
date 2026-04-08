@@ -6,14 +6,19 @@
  */
 
 import { WebSocketServer, WebSocket } from "ws";
+import { createServer as createHttpServer } from "node:http";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { createLogger } from "../logger.js";
 import {
   handleMessage,
   cancelSessionById,
+  cancelCurrentSession,
   getSession,
   listSessions,
   getOrCreateSession,
 } from "./session-manager.js";
+import { broadcastAgentToken, broadcastAgentStatus, broadcastAgentComplete } from "../dashboard.js";
 import {
   isClientMessage,
   serializeServerMessage,
@@ -284,4 +289,157 @@ export function stopGateway(): void {
 
 export function getConnectionCount(): number {
   return connections.size;
+}
+
+// ══════════════════════════════════════════════
+// HTTP API (for dashboard REST calls)
+// ══════════════════════════════════════════════
+
+let httpServer: ReturnType<typeof createHttpServer> | null = null;
+const HTTP_PORT = 18790;
+
+function parseBody(req: import("node:http").IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+    req.on("end", () => {
+      try { resolve(JSON.parse(body || "{}")); }
+      catch { reject(new Error("Invalid JSON")); }
+    });
+    req.on("error", reject);
+  });
+}
+
+export function startHttpApi(): void {
+  httpServer = createHttpServer(async (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    const sendJson = (status: number, data: unknown) => {
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(data));
+    };
+
+    try {
+      // POST /api/chat — send message to agent, response streams via dashboard SSE
+      if (req.method === "POST" && req.url === "/api/chat") {
+        const body = await parseBody(req);
+        const text = body["text"] as string;
+        if (!text) {
+          sendJson(400, { ok: false, error: "text is required" });
+          return;
+        }
+
+        const sessionId = "dashboard-default";
+
+        // Acknowledge immediately — response streams via SSE
+        sendJson(200, { ok: true, sessionId });
+
+        // Run agent in background (non-blocking)
+        const onEvent = (event: import("../runtime/types.js").RuntimeEvent) => {
+          broadcastRuntimeEvent(sessionId, event);
+          switch (event.kind) {
+            case "token":
+              broadcastAgentToken(sessionId, event.text);
+              break;
+            case "tool_start":
+              broadcastAgentStatus(sessionId, "tool_call", event.toolName, event.toolInput);
+              break;
+            case "tool_end":
+              broadcastAgentStatus(sessionId, "tool_done", event.toolName);
+              break;
+            case "message_complete":
+              broadcastAgentComplete(sessionId, event.text);
+              break;
+          }
+        };
+
+        handleMessage("dashboard", "default", text, onEvent).catch((err) => {
+          log.error(`Dashboard chat error: ${err}`);
+        });
+        return;
+      }
+
+      // POST /api/agent/cancel — cancel current dashboard agent run
+      if (req.method === "POST" && req.url === "/api/agent/cancel") {
+        const cancelled = cancelCurrentSession("dashboard", "default");
+        sendJson(200, { ok: true, cancelled });
+        return;
+      }
+
+      // GET /api/agent/status — get dashboard agent status
+      if (req.method === "GET" && req.url === "/api/agent/status") {
+        const session = getOrCreateSession("dashboard", "default");
+        sendJson(200, { ok: true, status: session.status, messageCount: session.messages.length });
+        return;
+      }
+
+      // ── Config endpoints ──
+      const PROJECT_ROOT = join(dirname(new URL(import.meta.url).pathname), "../..");
+
+      if (req.method === "GET" && req.url?.startsWith("/api/config/")) {
+        const tab = req.url.split("/api/config/")[1];
+        try {
+          let content = "";
+          if (tab === "soul") {
+            content = readFileSync(join(PROJECT_ROOT, "agent/SOUL.md"), "utf8");
+          } else if (tab === "memory") {
+            content = readFileSync(join(PROJECT_ROOT, "agent/MEMORY.md"), "utf8");
+          } else if (tab === "programs") {
+            const dir = join(PROJECT_ROOT, "agent/programs");
+            const files = readdirSync(dir).filter(f => f.endsWith(".md"));
+            content = files.map(f => `## ${f}\n\n${readFileSync(join(dir, f), "utf8")}`).join("\n\n---\n\n");
+          }
+          sendJson(200, { ok: true, content });
+        } catch (err) {
+          sendJson(500, { ok: false, error: String(err) });
+        }
+        return;
+      }
+
+      if (req.method === "POST" && req.url?.startsWith("/api/config/")) {
+        const tab = req.url.split("/api/config/")[1];
+        const body = await parseBody(req);
+        const content = body["content"] as string;
+        if (typeof content !== "string") {
+          sendJson(400, { ok: false, error: "content is required" });
+          return;
+        }
+        try {
+          if (tab === "soul") {
+            writeFileSync(join(PROJECT_ROOT, "agent/SOUL.md"), content);
+          } else if (tab === "memory") {
+            writeFileSync(join(PROJECT_ROOT, "agent/MEMORY.md"), content);
+          }
+          sendJson(200, { ok: true });
+        } catch (err) {
+          sendJson(500, { ok: false, error: String(err) });
+        }
+        return;
+      }
+
+      sendJson(404, { ok: false, error: "Not found" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      sendJson(500, { ok: false, error: msg });
+    }
+  });
+
+  httpServer.listen(HTTP_PORT, () => {
+    log.info(`Gateway HTTP API listening on http://localhost:${HTTP_PORT}`);
+  });
+}
+
+export function stopHttpApi(): void {
+  if (httpServer) {
+    httpServer.close();
+    httpServer = null;
+  }
 }

@@ -9,7 +9,8 @@ import { startPrograms, stopPrograms } from "./programs.js";
 import { sweepSubAgents } from "./subagent.js";
 import { logEvent } from "./dashboard.js";
 import { registerDashboardHooks } from "./dashboard-hooks.js";
-import { startGateway, stopGateway } from "./gateway/index.js";
+import { startGateway, stopGateway, startHttpApi, stopHttpApi } from "./gateway/index.js";
+import { loadSkills } from "./skills/index.js";
 
 const log = createLogger("main");
 
@@ -21,8 +22,12 @@ async function main(): Promise<void> {
   const config = validateConfig();
   log.info(`Jarvis starting — capabilities: ${config.capabilities.join(", ")}`);
 
-  // Start the WebSocket gateway
+  // Start the WebSocket gateway + HTTP API
   startGateway();
+  startHttpApi();
+
+  // Load dynamic skills
+  await loadSkills();
 
   // Restore sessions and init bot
   await initBot();
@@ -43,6 +48,7 @@ async function main(): Promise<void> {
     clearInterval(sweepInterval);
     stopPrograms();
     stopGateway();
+    stopHttpApi();
     await stopWebhookServer();
     await closeBrowser();
     await bot.stop();

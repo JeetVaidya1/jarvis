@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { logEvent } from "../dashboard.js";
 import { shellExec } from "./shell.js";
+import { getSkillTools, isSkillTool, executeSkillTool, listLoadedSkills, installSkill, loadSkills } from "../skills/index.js";
 import { fileRead, fileWrite } from "./files.js";
 import { memoryUpdate } from "./memory-tool.js";
 import {
@@ -40,6 +41,20 @@ import {
   claudeCodeReview,
 } from "./claude-code.js";
 import { searchMemory } from "../memory-search.js";
+import {
+  logOutcome,
+  resolveOutcome,
+  findSimilar,
+  getPendingOutcomes,
+  formatOutcomes,
+} from "../outcomes.js";
+import {
+  addToQueue,
+  getQueue,
+  approvePost,
+  rejectPost,
+  formatQueue,
+} from "../social/index.js";
 import {
   githubStatus,
   githubGetPrs,
@@ -747,6 +762,190 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
       required: ["query"],
     },
   },
+  // ── Social media tools ──
+  {
+    name: "social_draft",
+    description:
+      "Draft a social media post and add it to the queue for Jeet's approval. Supports 'x' (Twitter/X) platform.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        platform: {
+          type: "string",
+          enum: ["x"],
+          description: "Platform to post to (currently only 'x')",
+        },
+        content: {
+          type: "string",
+          description: "Post content (max 280 chars for X)",
+        },
+        scheduled_at: {
+          type: "string",
+          description: "Optional ISO timestamp to schedule the post for later",
+        },
+      },
+      required: ["platform", "content"],
+    },
+  },
+  {
+    name: "social_queue",
+    description:
+      "View the social media post queue. Optionally filter by status: draft, approved, posted, rejected.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        status: {
+          type: "string",
+          enum: ["draft", "approved", "posted", "rejected"],
+          description: "Filter by status. Omit to see all.",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "social_approve",
+    description: "Approve a draft post for publishing.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "Post ID to approve" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "social_reject",
+    description: "Reject a draft post.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "number", description: "Post ID to reject" },
+      },
+      required: ["id"],
+    },
+  },
+
+  // ── Outcome learning tools ──
+  {
+    name: "outcome_log",
+    description:
+      "Log a significant decision for outcome tracking. Use this when making predictions, recommendations, trade decisions, or task estimates. Returns an ID for later resolution.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        domain: {
+          type: "string",
+          description: "Decision domain: 'trading', 'recommendation', 'forecast', 'task_estimate', 'general'",
+        },
+        input_summary: {
+          type: "string",
+          description: "Brief description of the situation/input that led to this decision",
+        },
+        decision: {
+          type: "string",
+          description: "What was decided/predicted/recommended",
+        },
+        reasoning: {
+          type: "string",
+          description: "Why this decision was made (key factors, reasoning)",
+        },
+      },
+      required: ["domain", "input_summary", "decision"],
+    },
+  },
+  {
+    name: "outcome_resolve",
+    description:
+      "Record the actual outcome of a previously logged decision. Score from 0.0 (completely wrong) to 1.0 (perfect).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: {
+          type: "number",
+          description: "The outcome ID returned by outcome_log",
+        },
+        outcome: {
+          type: "string",
+          description: "What actually happened",
+        },
+        score: {
+          type: "number",
+          description: "Accuracy score: 0.0 = completely wrong, 1.0 = perfect prediction",
+        },
+      },
+      required: ["id", "outcome", "score"],
+    },
+  },
+  {
+    name: "outcome_similar",
+    description:
+      "Find similar past decisions with their outcomes. Use before making a new decision to learn from history.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "Description of the current situation to find similar past decisions",
+        },
+        domain: {
+          type: "string",
+          description: "Optional domain filter: 'trading', 'recommendation', 'forecast', etc.",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "outcome_pending",
+    description:
+      "List decisions that haven't been resolved yet. Use to follow up on past predictions.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+
+  // ── Skill management tools ──
+  {
+    name: "skill_list",
+    description:
+      "List all installed skills and their tools. Skills are loaded from ~/.jarvis/skills/.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "skill_install",
+    description:
+      "Install a new skill by providing its name and JavaScript code. The code must export a `tools` array and an `execute` function. Creates a new directory in ~/.jarvis/skills/.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        name: {
+          type: "string",
+          description: "Skill name (used as directory name, alphanumeric + hyphens)",
+        },
+        code: {
+          type: "string",
+          description: "JavaScript code for the skill's index.js. Must export `tools` array and `execute` function.",
+        },
+      },
+      required: ["name", "code"],
+    },
+  },
+  {
+    name: "skill_reload",
+    description: "Reload all skills from ~/.jarvis/skills/. Use after manually editing skill files.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
 ] as const;
 
 // ── Input interfaces ──
@@ -1088,7 +1287,66 @@ async function executeToolImpl(
       return { text: await searchMemory(input.query, input.max_results) };
     }
 
+    // Social media
+    case "social_draft": {
+      const input = toolInput as unknown as { platform: string; content: string; scheduled_at?: string };
+      const id = addToQueue(input.platform, input.content, input.scheduled_at);
+      return { text: `Post drafted (ID: ${id}). Status: draft. Jeet can approve it with /post approve ${id} or the social_approve tool.` };
+    }
+    case "social_queue": {
+      const input = toolInput as unknown as { status?: string };
+      const posts = getQueue(input.status as "draft" | "approved" | "posted" | "rejected" | undefined);
+      return { text: formatQueue(posts) };
+    }
+    case "social_approve": {
+      const input = toolInput as unknown as { id: number };
+      const success = approvePost(input.id);
+      return { text: success ? `Post ${input.id} approved for publishing.` : `Post ${input.id} not found or not in draft status.` };
+    }
+    case "social_reject": {
+      const input = toolInput as unknown as { id: number };
+      const success = rejectPost(input.id);
+      return { text: success ? `Post ${input.id} rejected.` : `Post ${input.id} not found or not in draft status.` };
+    }
+
+    // Outcome learning
+    case "outcome_log": {
+      const input = toolInput as unknown as { domain: string; input_summary: string; decision: string; reasoning?: string };
+      const id = logOutcome(input.domain, input.input_summary, input.decision, input.reasoning);
+      return { text: `Decision logged with ID: ${id}. Use outcome_resolve to record what actually happened later.` };
+    }
+    case "outcome_resolve": {
+      const input = toolInput as unknown as { id: number; outcome: string; score: number };
+      const success = resolveOutcome(input.id, input.outcome, input.score);
+      return { text: success ? `Outcome ${input.id} resolved (score: ${input.score.toFixed(2)}).` : `Outcome ${input.id} not found.` };
+    }
+    case "outcome_similar": {
+      const input = toolInput as unknown as { query: string; domain?: string };
+      const results = findSimilar(input.query, input.domain);
+      return { text: formatOutcomes(results) };
+    }
+    case "outcome_pending": {
+      const results = getPendingOutcomes();
+      return { text: formatOutcomes(results) };
+    }
+
+    // Skill management
+    case "skill_list":
+      return { text: listLoadedSkills() };
+    case "skill_install": {
+      const input = toolInput as unknown as { name: string; code: string };
+      return { text: await installSkill(input.name, input.code) };
+    }
+    case "skill_reload": {
+      const count = await loadSkills();
+      return { text: `Reloaded ${count} skill(s).` };
+    }
+
     default:
+      // Check if it's a dynamically loaded skill tool
+      if (isSkillTool(toolName)) {
+        return executeSkillTool(toolName, toolInput);
+      }
       return { text: `ERROR: Unknown tool '${toolName}'` };
   }
 }

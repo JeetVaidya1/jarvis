@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadSOUL, loadMemory, loadDailyLog, appendDailyLog } from "../memory.js";
 import { TOOL_DEFINITIONS } from "../tools/index.js";
+import { getSkillTools } from "../skills/index.js";
 import { pruneMessages } from "../compaction.js";
 import { emit } from "../events.js";
 import { createLogger } from "../logger.js";
@@ -179,7 +180,7 @@ export async function runAgentSession(
     const response = await runStreaming(
       systemPrompt,
       messages,
-      TOOL_DEFINITIONS as Anthropic.Tool[],
+      [...TOOL_DEFINITIONS, ...getSkillTools()] as Anthropic.Tool[],
       {
         model: model ?? DEFAULT_MODEL,
         maxTokens: DEFAULT_MAX_TOKENS,

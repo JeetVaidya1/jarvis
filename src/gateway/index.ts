@@ -1,4 +1,4 @@
-export { startGateway, stopGateway, broadcastRuntimeEvent, getConnectionCount } from "./server.js";
+export { startGateway, stopGateway, broadcastRuntimeEvent, getConnectionCount, startHttpApi, stopHttpApi } from "./server.js";
 export {
   handleMessage,
   getOrCreateSession,

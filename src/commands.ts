@@ -22,6 +22,7 @@ import {
   getBalance,
 } from "./trading/index.js";
 import { saveSession } from "./session.js";
+import { getQueue, approvePost, rejectPost, formatQueue } from "./social/index.js";
 import { appendDailyLog } from "./memory.js";
 import { emit } from "./events.js";
 import type Anthropic from "@anthropic-ai/sdk";
@@ -273,6 +274,44 @@ commands.set("/cancel", () => ({
   handled: true,
   cancelAgent: true,
 }));
+
+// ── /post ──
+commands.set("/post", (args) => {
+  const subcommand = args.split(" ")[0]?.toLowerCase() ?? "";
+  const idStr = args.split(" ")[1];
+
+  if (subcommand === "approve" && idStr) {
+    const id = parseInt(idStr, 10);
+    const success = approvePost(id);
+    return { handled: true, reply: success ? `Post ${id} approved for publishing.` : `Post ${id} not found or not a draft.` };
+  }
+
+  if (subcommand === "reject" && idStr) {
+    const id = parseInt(idStr, 10);
+    const success = rejectPost(id);
+    return { handled: true, reply: success ? `Post ${id} rejected.` : `Post ${id} not found or not a draft.` };
+  }
+
+  if (subcommand === "drafts") {
+    return { handled: true, reply: formatQueue(getQueue("draft")) };
+  }
+
+  // Default: show all
+  const posts = getQueue();
+  return {
+    handled: true,
+    reply: posts.length > 0 ? formatQueue(posts) : [
+      "**Social Media Queue**",
+      "",
+      "No posts in queue.",
+      "",
+      "`/post` — View all posts",
+      "`/post drafts` — View drafts only",
+      "`/post approve <id>` — Approve a draft",
+      "`/post reject <id>` — Reject a draft",
+    ].join("\n"),
+  };
+});
 
 // ── /help ──
 commands.set("/help", () => ({
