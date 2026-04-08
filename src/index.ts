@@ -9,41 +9,40 @@ import { startPrograms, stopPrograms } from "./programs.js";
 import { sweepSubAgents } from "./subagent.js";
 import { logEvent } from "./dashboard.js";
 import { registerDashboardHooks } from "./dashboard-hooks.js";
+import { startGateway, stopGateway } from "./gateway/index.js";
 
 const log = createLogger("main");
 
 async function main(): Promise<void> {
-  // Rotate old logs
   await rotateLogs();
 
-  // Wire internal events → dashboard activity feed
   registerDashboardHooks();
 
-  // Validate all config (required + optional)
   const config = validateConfig();
   log.info(`Jarvis starting — capabilities: ${config.capabilities.join(", ")}`);
 
-  // Restore conversation history from disk
+  // Start the WebSocket gateway
+  startGateway();
+
+  // Restore sessions and init bot
   await initBot();
 
   const bot = createBot();
 
-  // Start all systems
   startHeartbeat(bot);
   startWebhookServer(bot);
   await startPrograms(bot);
 
-  // Periodic sub-agent cleanup (every 10 minutes)
   const sweepInterval = setInterval(() => {
     const removed = sweepSubAgents();
     if (removed > 0) log.debug(`Swept ${removed} old sub-agent runs`);
   }, 10 * 60 * 1000);
 
-  // Graceful shutdown
   const shutdown = async (signal: string) => {
     log.info(`${signal} received — shutting down`);
     clearInterval(sweepInterval);
     stopPrograms();
+    stopGateway();
     await stopWebhookServer();
     await closeBrowser();
     await bot.stop();

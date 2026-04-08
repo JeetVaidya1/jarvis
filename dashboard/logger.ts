@@ -41,7 +41,7 @@ export function unregisterSseClient(client: SseClient): void {
   sseClients.delete(client);
 }
 
-function broadcast(payload: Record<string, unknown>): void {
+export function broadcast(payload: Record<string, unknown>): void {
   const data = `data: ${JSON.stringify(payload)}\n\n`;
   for (const client of sseClients) {
     if (!client.ended) {

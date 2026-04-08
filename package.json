@@ -9,29 +9,35 @@
     "build": "tsc && tsc -p dashboard/tsconfig.json",
     "start": "node dist/index.js",
     "dashboard": "tsx watch dashboard/index.ts",
-    "dev:full": "concurrently \"npm run dev\" \"npm run dashboard\""
+    "dev:full": "concurrently \"npm run dev\" \"npm run dashboard\"",
+    "voice": "tsx src/voice/pipeline.ts",
+    "voice:prod": "tsx src/voice/pipeline-v2.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@deepgram/sdk": "^5.0.0",
     "@huggingface/transformers": "^3.8.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@polymarket/clob-client": "^5.8.0",
     "better-sqlite3": "^12.8.0",
-    "express": "^4.21.0",
-    "systeminformation": "^5.22.0",
     "dotenv": "^16.4.7",
     "ethers": "^6.16.0",
+    "express": "^4.21.0",
     "googleapis": "^171.4.0",
     "grammy": "^1.35.0",
+    "kokoro-js": "^1.2.1",
     "node-cron": "^3.0.3",
     "playwright": "^1.58.2",
-    "sqlite-vec": "^0.1.7"
+    "sqlite-vec": "^0.1.7",
+    "systeminformation": "^5.22.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/node": "^22.13.0",
     "@types/node-cron": "^3.0.11",
+    "@types/ws": "^8.18.1",
     "concurrently": "^9.2.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"

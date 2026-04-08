@@ -10,7 +10,7 @@ import os from "node:os";
 import si from "systeminformation";
 import Database from "better-sqlite3";
 import { getRecentEvents, getAllSubagents, getStats } from "./db.js";
-import { registerSseClient, unregisterSseClient, logEvent, upsertSubagent, broadcastSubagentOutput } from "./logger.js";
+import { registerSseClient, unregisterSseClient, logEvent, upsertSubagent, broadcastSubagentOutput, broadcast } from "./logger.js";
 import type { Request, Response } from "express";
 
 const DASHBOARD_PORT = 4242;
@@ -293,6 +293,20 @@ export function createServer(): express.Application {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ ok: false, error: "Messages DB not accessible: " + message });
+    }
+  });
+
+  // ── Agent streaming events (tokens, status, complete) ──
+
+  app.post("/api/agent/stream", express.json({ limit: "64kb" }), (req: Request, res: Response) => {
+    try {
+      const body = req.body as Record<string, unknown>;
+      if (body.kind && typeof body.kind === "string") {
+        broadcast(body);
+      }
+      res.json({ ok: true });
+    } catch {
+      res.json({ ok: true });
     }
   });
 

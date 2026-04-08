@@ -34,7 +34,6 @@ import {
   getSubAgent,
   cancelSubAgent,
 } from "../subagent.js";
-import type { SubAgentBackend } from "../subagent.js";
 import {
   claudeCode,
   claudeCodeEdit,
@@ -586,7 +585,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     name: "subagent_spawn",
     description:
-      "Spawn a background sub-agent to handle a task without blocking the conversation. Returns immediately with a run ID. Default backend is 'cli' (Claude Code — FREE on Max plan). Use 'api' backend only if the task needs Jarvis's specific tools (Polymarket, browser, etc).",
+      "Spawn a background sub-agent to handle a task without blocking the conversation. Returns immediately with a run ID. The sub-agent has access to all of Jarvis's tools (Polymarket, browser, web search, etc).",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -598,18 +597,9 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
           type: "string",
           description: "Short label for this job (for tracking)",
         },
-        backend: {
-          type: "string",
-          enum: ["cli", "api"],
-          description: "Backend: 'cli' = Claude Code CLI (FREE, default), 'api' = Anthropic API (has Jarvis tools but costs money)",
-        },
-        working_dir: {
-          type: "string",
-          description: "Working directory for cli backend (project root)",
-        },
         model: {
           type: "string",
-          description: "Model override: 'sonnet', 'opus', 'haiku'",
+          description: "Model override: 'claude-sonnet-4-6' (default), 'claude-opus-4-6'",
         },
       },
       required: ["task"],
@@ -1039,10 +1029,9 @@ async function executeToolImpl(
 
     // Sub-agents
     case "subagent_spawn": {
-      const input = toolInput as unknown as { task: string; label?: string; backend?: string; working_dir?: string; model?: string };
-      const backend = (input.backend === "api" ? "api" : "cli") as SubAgentBackend;
-      const run = spawnSubAgent(input.task, input.label, backend, input.working_dir, input.model);
-      return { text: `Sub-agent spawned: ${run.id} (${run.label})\nBackend: ${run.backend} ${run.backend === "cli" ? "(FREE — Max plan)" : "(API — metered)"}\nStatus: ${run.status}\nUse subagent_status to check results.` };
+      const input = toolInput as unknown as { task: string; label?: string; model?: string };
+      const run = spawnSubAgent(input.task, input.label, undefined, input.model);
+      return { text: `Sub-agent spawned: ${run.id} (${run.label})\nStatus: ${run.status}\nUse subagent_status to check results.` };
     }
     case "subagent_status": {
       const input = toolInput as unknown as { id?: string };

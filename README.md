@@ -9,19 +9,23 @@ Jarvis is a self-hosted autonomous agent that serves as a second brain and force
 ## Architecture
 
 ```
-Telegram (GrammY)
+Channels (Telegram, Dashboard, Voice, WebSocket clients)
     ↓
-Agent Loop (Claude claude-sonnet-4-6)
+Gateway (ws://localhost:18789 — session management, routing, event broadcast)
     ↓
-Tool Router
+Embedded Runtime (Anthropic SDK streaming — token-by-token, cancellable)
+    ↓
+Tool Router (57 tools)
     ├── Shell execution
     ├── File read/write
     ├── Browser automation (Playwright)
-    ├── Web search + fetch
+    ├── Web search + fetch + research
     ├── Polymarket trading (CLOB SDK)
     ├── GitHub operations (gh CLI)
-    ├── Claude Code delegation (claude --print)
-    └── Sub-agent spawning
+    ├── Google Calendar + Gmail
+    ├── macOS automation + iMessage
+    ├── Sub-agent spawning
+    └── Memory + semantic search
     ↓
 Memory + Session persistence
     ↓
@@ -31,15 +35,34 @@ Scheduled programs (cron via node-cron)
 ```
 
 **Key design decisions:**
+- **Embedded runtime** — Anthropic SDK streaming, not CLI subprocess. Token-by-token responses, real-time tool visibility, mid-run cancellation
+- **WebSocket gateway** — central control plane. Telegram is just one channel adapter. Dashboard, voice, and external clients connect the same way
+- **Max subscription OAuth** — reads OAuth token from macOS Keychain for free usage on Claude Max plan
 - All intelligence lives in Claude — tools are thin wrappers
 - Memory is Markdown files + SQLite vector store for semantic search
 - Sessions are saved/restored across restarts so context survives
 - The trading engine runs as a sub-system within the same process
-- Claude Code is used for all non-trivial coding tasks (free on Max plan)
 
 ---
 
 ## Features
+
+### Embedded Agent Runtime
+- **Streaming responses** — tokens arrive one by one via Anthropic SDK `messages.stream()`
+- **Real-time tool visibility** — see which tools are being called as they execute
+- **Cancellation** — `/cancel` stops the agent mid-response (AbortController propagated to SDK)
+- **No cold start** — persistent in-process runtime, no subprocess per message
+- **Max subscription** — auto-detects Claude Max OAuth token from macOS Keychain (free)
+- **Retry logic** — automatic retries with exponential backoff for 429/5xx errors
+- **Tool loop detection** — breaks infinite tool calling cycles
+
+### WebSocket Gateway
+- **Port 18789** — persistent WebSocket connections for all clients
+- **Typed protocol** — discriminated union message types (chat.send, agent.cancel, agent.status, session.list)
+- **Session management** — channel-to-session mapping, conversation persistence
+- **Event broadcasting** — runtime events (tokens, tool calls, completions) broadcast to all connected clients
+- **Auth** — optional `GATEWAY_TOKEN` for access control
+- **Heartbeat** — automatic dead connection detection via ping/pong
 
 ### Core Agent
 - Conversational AI via Telegram with full tool access
@@ -92,23 +115,23 @@ Scheduled programs (cron via node-cron)
 - Trigger workflow runs
 - Uses `gh` CLI under the hood
 
-### Claude Code Delegation
-- Delegates complex coding tasks to `claude --print` subprocess
-- Free on Max plan — preferred over inline code edits for anything non-trivial
-- Full file system and web access within the subprocess
+### Google Integration
+- **Calendar** — view today's events, upcoming schedule
+- **Gmail** — inbox triage, search, read emails
 
 ### Web Dashboard
 
 A real-time command center UI at `http://localhost:4242`.
 
-- **Live event feed** — every tool call, message, trade, and error streams in via SSE
-- **Sub-agent tracker** — running/completed background jobs with output
+- **Live Agent** — streaming view of the agent response as tokens arrive, with active tool indicators
+- **Activity Feed** — every tool call, message, trade, and error streams in via SSE
+- **Sub-agent tracker** — running/completed background jobs with live output
 - **System stats** — CPU, memory, disk, network (live SSE updates via `systeminformation`)
 - **Portfolio widget** — Polymarket positions and P&L at a glance
 - **iMessage feed** — recent chats surfaced in the dashboard
 - **Neural activity** — visual representation of recent tool calls
 - **Drag-and-drop layout** — widgets are resizable/repositionable; layout persists in `dashboard-layout.json`
-- **Decoupled architecture** — Express server independent of agent; agent POSTs events over HTTP (fire-and-forget)
+- **Decoupled architecture** — Express server independent of agent; streaming events flow via HTTP POST → SSE broadcast
 
 ```bash
 npm run dev:full   # agent + dashboard together
@@ -117,6 +140,9 @@ npm run dashboard  # dashboard only
 
 ### Sub-Agents
 - Spawn background tasks that don't block the main conversation
+- Run through the embedded runtime (same streaming, same tools — no CLI subprocess)
+- Cancellable via AbortController — no orphaned processes
+- Progress streamed to dashboard in real-time
 - Check status, retrieve results, cancel running jobs
 
 ### Scheduled Programs
@@ -138,11 +164,47 @@ npm run dashboard  # dashboard only
 jarvis/
 ├── src/
 │   ├── index.ts          # Entry point — boots everything
-│   ├── agent.ts          # Main agent loop (Claude API calls)
-│   ├── bot.ts            # Telegram bot setup (GrammY)
-│   ├── commands.ts       # Slash commands (/status, /reset, etc.)
+│   ├── agent.ts          # Thin adapter (delegates to runtime)
+│   ├── bot.ts            # Telegram channel adapter (routes through gateway)
+│   ├── commands.ts       # Slash commands (/status, /cancel, /reset, etc.)
 │   ├── config.ts         # Environment config + validation
 │   ├── events.ts         # Event bus for cross-module communication
+│   ├── runtime/
+│   │   ├── types.ts      # RuntimeEvent, AgentSession, RuntimeOptions
+│   │   ├── streaming.ts  # Core streaming loop (Anthropic SDK messages.stream())
+│   │   ├── agent-runtime.ts # Session management, system prompt, compaction
+│   │   └── index.ts      # Barrel exports
+│   ├── gateway/
+│   │   ├── protocol.ts   # Typed WebSocket message protocol
+│   │   ├── session-manager.ts # Session registry, channel mapping, persistence
+│   │   ├── server.ts     # WebSocket server (port 18789), auth, broadcast
+│   │   └── index.ts      # Barrel exports
+│   ├── tools/
+│   │   ├── index.ts      # Tool registry + router (57 tools)
+│   │   ├── shell.ts      # shell_exec — run terminal commands
+│   │   ├── files.ts      # file_read / file_write
+│   │   ├── browser.ts    # Playwright browser automation
+│   │   ├── websearch.ts  # DuckDuckGo search + URL fetch + prices
+│   │   ├── github.ts     # GitHub operations via gh CLI
+│   │   ├── polymarket.ts # Polymarket CLOB + Data API tools
+│   │   ├── claude-code.ts # claude_code / claude_code_edit / claude_code_review
+│   │   ├── news.ts           # NewsAPI — headlines + search
+│   │   ├── coingecko.ts      # CoinGecko — trending, markets, coin info, DeFi
+│   │   ├── finance.ts        # Alpha Vantage — stock overview, earnings, income
+│   │   ├── system-monitor.ts # macOS system monitor — CPU, memory, disk, network
+│   │   ├── imcp.ts           # iMCP — iMessage, Contacts, Reminders, Weather
+│   │   ├── research.ts       # Brave Search, Firecrawl, Perplexity
+│   │   ├── google.ts         # Google Calendar + Gmail tools
+│   │   ├── mac-computer.ts   # macOS automation (clicks, typing, screenshots)
+│   │   └── memory-tool.ts    # memory_update tool
+│   ├── trading/
+│   │   ├── index.ts      # Trading engine entry point
+│   │   ├── engine.ts     # Main trading loop + lifecycle
+│   │   ├── scanner.ts    # Market discovery + filtering
+│   │   ├── forecaster.ts # Claude Opus market analysis + edge calculation
+│   │   ├── sentiment.ts  # Local ML sentiment (DistilBERT SST-2, ~30ms)
+│   │   ├── executor.ts   # Order placement + dry-run logic
+│   │   └── risk.ts       # Position limits, capital constraints
 │   ├── heartbeat.ts      # 30-min system health checks
 │   ├── links.ts          # URL auto-expansion in messages
 │   ├── logger.ts         # Structured logging to daily log files
@@ -153,49 +215,23 @@ jarvis/
 │   ├── semantic-memory.ts # Vector embeddings + sqlite-vec store
 │   ├── programs.ts       # Scheduled autonomous programs
 │   ├── session.ts        # Session save/restore across restarts
-│   ├── subagent.ts       # Background sub-agent management
+│   ├── subagent.ts       # Background sub-agent management (embedded runtime)
 │   ├── compaction.ts     # Context window compaction logic
 │   ├── webhook.ts        # HTTP webhook ingress server
-│   ├── tools/
-│   │   ├── index.ts      # Tool registry + router
-│   │   ├── shell.ts      # shell_exec — run terminal commands
-│   │   ├── files.ts      # file_read / file_write
-│   │   ├── browser.ts    # Playwright browser automation
-│   │   ├── websearch.ts  # DuckDuckGo search + URL fetch + prices
-│   │   ├── github.ts     # GitHub operations via gh CLI
-│   │   ├── polymarket.ts # Polymarket CLOB + Data API tools
-│   │   ├── claude-code.ts # claude_code / claude_code_edit / claude_code_review
-│   │   ├── news.ts           # NewsAPI — headlines + search
-│   │   ├── coingecko.ts      # CoinGecko — trending, markets, coin info, DeFi
-│   │   ├── finance.ts        # Alpha Vantage — stock overview, earnings, income, valuation
-│   │   ├── system-monitor.ts # macOS system monitor — CPU, memory, disk, processes, network
-│   │   ├── imcp.ts           # iMCP — iMessage, Contacts, Reminders, Weather
-│   │   ├── research.ts       # Brave Search, Firecrawl, Perplexity
-│   │   ├── google.ts         # Google Calendar + Gmail tools
-│   │   ├── mac-computer.ts   # macOS automation (clicks, typing, screenshots)
-│   │   └── memory-tool.ts    # memory_update tool
-│   ├── dashboard.ts          # Dashboard event emitter (HTTP shim)
-│   ├── dashboard-hooks.ts    # Wires agent/trade events → dashboard
-│   └── trading/
-│       ├── index.ts      # Trading engine entry point
-│       ├── engine.ts     # Main trading loop + lifecycle
-│       ├── scanner.ts    # Market discovery + filtering
-│       ├── forecaster.ts # Claude Opus market analysis + edge calculation
-│       ├── sentiment.ts  # Local ML sentiment (DistilBERT SST-2, ~30ms)
-│       ├── executor.ts   # Order placement + dry-run logic
-│       └── risk.ts       # Position limits, capital constraints
+│   ├── dashboard.ts      # Dashboard event emitter (HTTP shim + streaming)
+│   └── dashboard-hooks.ts # Wires agent/trade events → dashboard
+├── dashboard/            # Web dashboard (Express server + UI)
+│   ├── index.ts          # Dashboard entry point
+│   ├── server.ts         # Express server — REST + SSE + agent streaming
+│   ├── db.ts             # SQLite event store
+│   ├── logger.ts         # SSE broadcaster
+│   └── public/           # Static UI assets (HTML, JS, CSS)
 ├── agent/
 │   ├── SOUL.md           # System prompt — Jarvis's identity + instructions
 │   ├── MEMORY.md         # Index of memory files
 │   ├── HEARTBEAT.md      # Heartbeat program config
 │   ├── programs/         # Scheduled autonomous tasks (cron + prompt)
 │   └── skills/           # Reusable skill prompts (GitHub, Polymarket, etc.)
-├── dashboard/            # Web dashboard (Express server + UI)
-│   ├── index.ts          # Dashboard entry point
-│   ├── server.ts         # Express server — REST + SSE endpoints
-│   ├── db.ts             # SQLite event store
-│   ├── logger.ts         # SSE broadcaster
-│   └── public/           # Static UI assets
 ├── dashboard-layout.json # Persisted widget layout
 ├── memory/               # Persistent memory files (gitignored except .gitkeep)
 ├── logs/                 # Daily log files (gitignored)
@@ -212,7 +248,7 @@ jarvis/
 ### Prerequisites
 - Node.js 22+
 - A Telegram bot token ([@BotFather](https://t.me/BotFather))
-- An Anthropic API key (or Claude Max plan with `claude` CLI installed)
+- An Anthropic API key (or Claude Max plan — auto-detected from macOS Keychain)
 - `gh` CLI installed and authenticated (for GitHub tools)
 - Playwright browsers: `npx playwright install chromium`
 
@@ -249,24 +285,22 @@ POLYMARKET_PROXY_ADDRESS=
 # GitHub (optional — fallback if gh CLI not available)
 GITHUB_TOKEN=
 
+# Gateway auth (optional — protects WebSocket gateway)
+GATEWAY_TOKEN=
+
 # NewsAPI (optional — enables jarvis_news_headlines + jarvis_news_search)
-# Free tier: 100 req/day. Get key at https://newsapi.org
 NEWS_API_KEY=
 
 # Alpha Vantage (optional — enables stock fundamentals tools)
-# Free tier: 25 req/day. Get key at https://www.alphavantage.co/support/#api-key
 ALPHA_VANTAGE_KEY=
 
 # Brave Search (optional — enables jarvis_brave_search)
-# Get key at https://brave.com/search/api/
 BRAVE_API_KEY=
 
 # Firecrawl (optional — enables jarvis_firecrawl_scrape + jarvis_firecrawl_crawl)
-# Get key at https://firecrawl.dev
 FIRECRAWL_API_KEY=
 
 # Perplexity (optional — enables jarvis_perplexity_search)
-# Get key at https://www.perplexity.ai/settings/api
 PERPLEXITY_API_KEY=
 
 # Google OAuth (optional — enables Calendar + Gmail tools)
@@ -298,10 +332,14 @@ npm run build && npm start
 | Command | Description |
 |---------|-------------|
 | `/status` | System status: memory, uptime, active jobs |
+| `/cancel` | Cancel the current agent task mid-response |
 | `/reset` | Clear conversation context |
 | `/compact` | Force context compaction |
 | `/history` | Show recent conversation summary |
 | `/jobs` | List running background sub-agents |
+| `/trade start` | Start autonomous trading engine |
+| `/trade stop` | Stop trading engine |
+| `/trade status` | Trading status and history |
 | `/help` | Show available commands |
 
 ---
@@ -326,13 +364,6 @@ The trading engine lives in `src/trading/` and runs as part of the main process.
 - `minEdge` — minimum edge required (default 4%)
 - `maxPositions` — max concurrent open positions (default 4)
 
-**Start/stop via Telegram:**
-```
-/trade start
-/trade stop
-/trade status
-```
-
 ---
 
 ## Memory System
@@ -354,25 +385,6 @@ Memory search uses vector embeddings (not just keywords). When you search for "p
 - `sqlite-vec` — vector similarity extension for SQLite, zero infra
 - `better-sqlite3` — sync SQLite interface
 
-**Flow:**
-1. On memory write → chunks text by paragraph → embeds each chunk → stores in `memory/vectors.db`
-2. On memory search → embeds query → `SELECT ... WHERE embedding MATCH ? ORDER BY distance LIMIT k`
-3. Falls back to keyword search if vector store is empty (first run before any indexing)
-
-Logs are written to `logs/YYYY-MM-DD.log` and include every agent response, tool call result, and trade event.
-
----
-
-## MCP Server
-
-Jarvis exposes its tools as an MCP (Model Context Protocol) server at `jarvis-mcp.json`. This lets Claude Code instances connect to Jarvis's tool set directly — enabling Claude Code to call `polymarket_get_positions`, `jarvis_browser_screenshot`, etc. from within a VS Code session.
-
-```bash
-# The MCP server runs automatically alongside Jarvis
-# Config: jarvis-mcp.json
-node dist/mcp-server.js
-```
-
 ---
 
 ## Tech Stack
@@ -381,6 +393,8 @@ node dist/mcp-server.js
 |-------|-----------|
 | Runtime | Node.js 22, TypeScript |
 | AI | Anthropic Claude (claude-sonnet-4-6 for agent, claude-opus-4-6 for trading forecasts) |
+| Agent Runtime | Anthropic SDK streaming (`messages.stream()`) |
+| Gateway | WebSocket (`ws`) on port 18789 |
 | Telegram | GrammY |
 | Browser | Playwright (headless Chromium) |
 | Trading | @polymarket/clob-client |
@@ -398,8 +412,10 @@ node dist/mcp-server.js
 - Only the `TELEGRAM_ALLOWED_USER_ID` can interact with Jarvis — all other users are rejected
 - `.env` is gitignored — never committed
 - Webhook requests are HMAC-verified
+- WebSocket gateway supports token-based auth via `GATEWAY_TOKEN`
 - Polymarket orders always dry-run first; orders over $50 require extra confirmation
 - No secrets are ever logged or included in responses
+- OAuth tokens read from macOS Keychain — never stored in config files
 
 ---
 

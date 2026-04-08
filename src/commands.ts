@@ -34,6 +34,7 @@ export interface CommandResult {
   handled: boolean;
   reply?: string;
   clearHistory?: boolean;
+  cancelAgent?: boolean;
 }
 
 type CommandHandler = (
@@ -267,6 +268,12 @@ commands.set("/trade", async (args) => {
   };
 });
 
+// ── /cancel ──
+commands.set("/cancel", () => ({
+  handled: true,
+  cancelAgent: true,
+}));
+
 // ── /help ──
 commands.set("/help", () => ({
   handled: true,
@@ -274,6 +281,7 @@ commands.set("/help", () => ({
     "**Jarvis Commands**",
     "",
     "`/status` — System status (uptime, memory, jobs)",
+    "`/cancel` — Cancel the current agent task",
     "`/reset` — Clear conversation history",
     "`/compact` — Save context to memory and clear history",
     "`/history` — Conversation stats and token usage",
@@ -291,7 +299,7 @@ commands.set("/help", () => ({
 
 export async function handleCommand(
   text: string,
-  history: MessageParam[],
+  history: MessageParam[] = [],
 ): Promise<CommandResult> {
   const trimmed = text.trim();
 

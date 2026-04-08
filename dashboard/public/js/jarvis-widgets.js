@@ -815,3 +815,106 @@ WIDGETS['jarvis-imessage'] = {
     })();
   `,
 };
+
+// ─────────────────────────────────────────────
+// jarvis-live — Live Agent Response
+// ─────────────────────────────────────────────
+WIDGETS['jarvis-live'] = {
+  name: 'Live Agent',
+  icon: '⚡',
+  category: 'large',
+  description: 'Live streaming view of the agent response — see tokens arrive in real-time, tool calls as they happen, and the full response as it builds.',
+  defaultWidth: 500,
+  defaultHeight: 400,
+  hasApiKey: false,
+  properties: {
+    title: 'Live Agent',
+    refreshInterval: 0,
+  },
+  preview: `<div style="padding:8px;font-size:11px;">
+    <div style="color:#3fb950;font-size:10px;margin-bottom:4px;">● STREAMING</div>
+    <div style="color:#e6edf3;font-family:monospace;">Hello! I'm analyzing the market data...</div>
+  </div>`,
+  generateHtml: (props) => `
+    <div class="dash-card" id="widget-${props.id}" style="height:100%;display:flex;flex-direction:column;">
+      <div class="dash-card-head">
+        <span class="dash-card-title">⚡ ${props.title || 'Live Agent'}</span>
+        <span id="${props.id}-status" style="margin-left:auto;font-size:10px;color:#8b949e;">IDLE</span>
+      </div>
+      <div id="${props.id}-tools" style="padding:4px 10px;font-size:10px;color:#8b949e;border-bottom:1px solid #21262d;display:none;"></div>
+      <div id="${props.id}-body" style="flex:1;overflow-y:auto;padding:10px;font-size:12px;font-family:'SF Mono',Monaco,monospace;line-height:1.5;color:#e6edf3;white-space:pre-wrap;word-break:break-word;">
+        <span style="color:#8b949e;">Waiting for agent activity...</span>
+      </div>
+    </div>`,
+  generateJs: (props) => `
+    (function() {
+      const bodyEl = document.getElementById('${props.id}-body');
+      const statusEl = document.getElementById('${props.id}-status');
+      const toolsEl = document.getElementById('${props.id}-tools');
+      let buffer = '';
+      let activeTools = [];
+      let lastActivity = 0;
+
+      function updateStatus(text, color) {
+        if (statusEl) {
+          statusEl.textContent = text;
+          statusEl.style.color = color;
+        }
+      }
+
+      function renderTools() {
+        if (!toolsEl) return;
+        if (activeTools.length === 0) {
+          toolsEl.style.display = 'none';
+          return;
+        }
+        toolsEl.style.display = 'block';
+        toolsEl.innerHTML = activeTools.map(t =>
+          '<span style="background:#1c3a5e;color:#58a6ff;padding:1px 5px;border-radius:3px;margin-right:4px;">' + (window._esc ? window._esc(t) : t) + '</span>'
+        ).join('');
+      }
+
+      window.onJarvisStream && window.onJarvisStream(function(payload) {
+        if (payload.kind === 'agent_token') {
+          if (lastActivity === 0 || Date.now() - lastActivity > 30000) {
+            buffer = '';
+          }
+          lastActivity = Date.now();
+          buffer += payload.text;
+          if (bodyEl) bodyEl.textContent = buffer;
+          if (bodyEl) bodyEl.scrollTop = bodyEl.scrollHeight;
+          updateStatus('● STREAMING', '#3fb950');
+        }
+
+        if (payload.kind === 'agent_status') {
+          lastActivity = Date.now();
+          if (payload.status === 'tool_call' && payload.toolName) {
+            const label = payload.toolName.replace(/_/g, ' ');
+            activeTools.push(label);
+            renderTools();
+            updateStatus('● TOOL: ' + label, '#58a6ff');
+          }
+          if (payload.status === 'tool_done') {
+            const label = (payload.toolName || '').replace(/_/g, ' ');
+            activeTools = activeTools.filter(t => t !== label);
+            renderTools();
+            if (activeTools.length === 0) {
+              updateStatus('● STREAMING', '#3fb950');
+            }
+          }
+        }
+
+        if (payload.kind === 'agent_complete') {
+          activeTools = [];
+          renderTools();
+          updateStatus('COMPLETE', '#8b949e');
+          if (payload.text && bodyEl) {
+            bodyEl.textContent = payload.text;
+            bodyEl.scrollTop = bodyEl.scrollHeight;
+          }
+          buffer = '';
+        }
+      });
+    })();
+  `,
+};

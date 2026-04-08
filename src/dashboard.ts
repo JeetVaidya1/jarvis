@@ -59,3 +59,17 @@ export function upsertSubagent(agent: SubagentRecord): void {
 export function logSubagentOutput(id: string, chunk: string): void {
   post(`/api/subagents/${encodeURIComponent(id)}/output`, { chunk: chunk.slice(0, 2000) });
 }
+
+// ── Streaming events (for live agent response in dashboard) ──
+
+export function broadcastAgentToken(sessionId: string, text: string): void {
+  post("/api/agent/stream", { kind: "agent_token", sessionId, text });
+}
+
+export function broadcastAgentStatus(sessionId: string, status: string, toolName?: string, toolInput?: Record<string, unknown>): void {
+  post("/api/agent/stream", { kind: "agent_status", sessionId, status, toolName, toolInput });
+}
+
+export function broadcastAgentComplete(sessionId: string, text: string): void {
+  post("/api/agent/stream", { kind: "agent_complete", sessionId, text });
+}
